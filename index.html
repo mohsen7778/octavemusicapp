@@ -86,18 +86,56 @@
         </main>
 
         <div class="mini-player glass-panel">
-            <div class="progress-bar-mini" style="width: 45%;"></div>
+            <div class="progress-bar-mini" id="mini-progress" style="width: 0%;"></div>
             <div class="mini-inner">
                 <div class="mini-art"></div>
                 <div class="mini-info">
-                    <div class="mini-title">Blinding Lights</div>
-                    <div class="mini-artist">The Weeknd</div>
+                    <div class="mini-title">Nothing Playing</div>
+                    <div class="mini-artist">Select a track</div>
                 </div>
                 <div class="mini-controls">
                     <button class="icon-btn"><i class="fa-solid fa-laptop-medical"></i></button>
                     <button class="icon-btn"><i class="fa-regular fa-heart"></i></button>
                     <button class="icon-btn play-btn-mini"><i class="fa-solid fa-play"></i></button>
                 </div>
+            </div>
+        </div>
+
+        <div id="full-player" class="full-player-overlay">
+            <div class="fp-header">
+                <button class="icon-btn" id="close-fp"><i class="fa-solid fa-chevron-down"></i></button>
+                <span class="fp-header-title">Now Playing</span>
+                <button class="icon-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            </div>
+            
+            <div class="fp-art-container">
+                <img id="fp-art" src="" alt="Album Art" class="shadow-heavy">
+            </div>
+            
+            <div class="fp-info-row">
+                <div class="fp-meta">
+                    <h2 id="fp-title">Nothing Playing</h2>
+                    <p id="fp-artist">Select a track</p>
+                </div>
+                <button class="icon-btn" id="fp-like"><i class="fa-regular fa-heart"></i></button>
+            </div>
+            
+            <div class="fp-progress-section">
+                <div class="fp-progress-bar" id="fp-progress-container">
+                    <div class="fp-progress-fill" id="fp-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div class="fp-time-row">
+                    <span id="fp-time-current">0:00</span>
+                    <span id="fp-time-total">0:00</span>
+                </div>
+            </div>
+            
+            <div class="fp-controls">
+                <button class="icon-btn sm"><i class="fa-solid fa-shuffle"></i></button>
+                <button class="icon-btn" id="fp-prev"><i class="fa-solid fa-backward-step"></i></button>
+                <button class="play-btn-huge" id="fp-play"><i class="fa-solid fa-play"></i></button>
+                <button class="icon-btn" id="fp-next"><i class="fa-solid fa-forward-step"></i></button>
+                <button class="icon-btn sm"><i class="fa-solid fa-repeat"></i></button>
             </div>
         </div>
 
