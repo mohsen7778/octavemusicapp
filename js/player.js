@@ -1,6 +1,6 @@
 window.OCTAVE = {
-    queue: [], currentIndex: -1, isPlaying: false,
-    liked: {}, playlists: {}, recentPlayed: [], recentSearches: [],
+    queue:[], currentIndex: -1, isPlaying: false,
+    liked: {}, playlists: {}, recentPlayed: [], recentSearches:[],
     playStats: {}, activeTrackForOptions: null
 };
 
@@ -20,10 +20,10 @@ function loadCache() {
         const parsed = JSON.parse(data);
         window.OCTAVE.liked = parsed.liked || {};
         window.OCTAVE.playlists = parsed.playlists || {};
-        window.OCTAVE.recentPlayed = parsed.recentPlayed || [];
-        window.OCTAVE.recentSearches = parsed.recentSearches || [];
+        window.OCTAVE.recentPlayed = parsed.recentPlayed ||[];
+        window.OCTAVE.recentSearches = parsed.recentSearches ||[];
         window.OCTAVE.playStats = parsed.playStats || {};
-        window.OCTAVE.queue = parsed.queue || [];
+        window.OCTAVE.queue = parsed.queue ||[];
         window.OCTAVE.currentIndex = parsed.currentIndex || -1;
     }
 }
@@ -55,11 +55,13 @@ window.importVault = (event) => {
     reader.readAsText(file);
 };
 
-const INVIDIOUS = [
+// Added more instances for ultra-high reliability 
+const INVIDIOUS =[
     'https://inv.nadeko.net', 'https://invidious.privacyredirect.com',
-    'https://invidious.nerdvpn.de', 'https://iv.melmac.space', 'https://invidious.io.lol'
+    'https://invidious.nerdvpn.de', 'https://iv.melmac.space', 
+    'https://invidious.io.lol', 'https://invidious.lunar.icu'
 ];
-let invIdx = 0;
+let invIdx = Math.floor(Math.random() * INVIDIOUS.length);
 let YTP = null, ytReady = false, progressTimer = null, sleepTimerId = null;
 
 const script = document.createElement('script');
@@ -148,7 +150,7 @@ window.playTrackByIndex = (index) => {
     const track = window.OCTAVE.queue[index];
     
     window.OCTAVE.playStats[track.videoId] = (window.OCTAVE.playStats[track.videoId] || 0) + 1;
-    window.OCTAVE.recentPlayed = [track, ...window.OCTAVE.recentPlayed.filter(t => t.videoId !== track.videoId)];
+    window.OCTAVE.recentPlayed =[track, ...window.OCTAVE.recentPlayed.filter(t => t.videoId !== track.videoId)];
     saveCache();
     
     updatePlayerUI(track);
@@ -157,7 +159,7 @@ window.playTrackByIndex = (index) => {
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
             title: track.title, artist: track.author,
-            artwork: [{ src: track.thumb, sizes: '512x512', type: 'image/jpeg' }]
+            artwork:[{ src: track.thumb, sizes: '512x512', type: 'image/jpeg' }]
         });
         navigator.mediaSession.setActionHandler('play', () => YTP.playVideo());
         navigator.mediaSession.setActionHandler('pause', () => YTP.pauseVideo());
@@ -167,7 +169,7 @@ window.playTrackByIndex = (index) => {
 };
 
 window.playTrack = (track) => {
-    window.OCTAVE.recentSearches = [track, ...window.OCTAVE.recentSearches.filter(t => t.videoId !== track.videoId)];
+    window.OCTAVE.recentSearches =[track, ...window.OCTAVE.recentSearches.filter(t => t.videoId !== track.videoId)];
     const existIdx = window.OCTAVE.queue.findIndex(t => t.videoId === track.videoId);
     if (existIdx >= 0) { window.playTrackByIndex(existIdx); } 
     else { window.OCTAVE.queue.push(track); window.playTrackByIndex(window.OCTAVE.queue.length - 1); }
@@ -178,24 +180,47 @@ window.playPrev = () => {
     else if (window.OCTAVE.currentIndex > 0) { window.playTrackByIndex(window.OCTAVE.currentIndex - 1); }
 };
 
+// --- ADVANCED TASTE PROFILE AUTO-DJ ALGORITHM ---
 async function playNextLogic() {
     if (window.OCTAVE.currentIndex < window.OCTAVE.queue.length - 1) {
         window.playTrackByIndex(window.OCTAVE.currentIndex + 1);
     } else {
-        const currentTrack = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-        if (!currentTrack) return;
+        let seedTrack = window.OCTAVE.queue[window.OCTAVE.currentIndex];
+        if (!seedTrack) return;
+        
+        // Taste Weighting: Stop drifting too far from user's actual taste
+        const likedKeys = Object.keys(window.OCTAVE.liked);
+        const recentTracks = window.OCTAVE.recentPlayed;
+        const rand = Math.random();
+        
+        if (rand < 0.3 && likedKeys.length > 0) {
+            // 30% chance: Pivot recommendations off a random Liked song
+            seedTrack = window.OCTAVE.liked[likedKeys[Math.floor(Math.random() * likedKeys.length)]];
+        } else if (rand < 0.5 && recentTracks.length > 0) {
+            // 20% chance: Pivot recommendations off a Recently Played song
+            seedTrack = recentTracks[Math.floor(Math.random() * recentTracks.length)];
+        }
+        // 50% chance: Stick to the currently playing song to maintain current mood/flow
         
         for (let i = 0; i < INVIDIOUS.length; i++) {
             const base = INVIDIOUS[(invIdx + i) % INVIDIOUS.length];
             try {
-                const r = await fetch(`${base}/api/v1/videos/${currentTrack.videoId}?fields=recommendedVideos`, { signal: AbortSignal.timeout(5000) });
+                const r = await fetch(`${base}/api/v1/videos/${seedTrack.videoId}?fields=recommendedVideos`, { signal: AbortSignal.timeout(5000) });
                 if (r.ok) {
                     const d = await r.json();
                     if (d.recommendedVideos && d.recommendedVideos.length > 0) {
-                        const rec = d.recommendedVideos[0];
+                        
+                        // Prevent loops: Filter out tracks played recently
+                        const recentIds = window.OCTAVE.recentPlayed.slice(0, 15).map(t => t.videoId);
+                        let freshRecs = d.recommendedVideos.filter(v => !recentIds.includes(v.videoId));
+                        if (freshRecs.length === 0) freshRecs = d.recommendedVideos;
+                        
+                        // Pick randomly from the top 3 recommendations for variety
+                        const pick = freshRecs[Math.floor(Math.random() * Math.min(3, freshRecs.length))];
+                        
                         const nextTrack = {
-                            videoId: rec.videoId, title: rec.title, author: rec.author,
-                            thumb: (rec.videoThumbnails && rec.videoThumbnails.length > 0) ? rec.videoThumbnails[0].url : ''
+                            videoId: pick.videoId, title: pick.title, author: pick.author,
+                            thumb: (pick.videoThumbnails && pick.videoThumbnails.length > 0) ? pick.videoThumbnails[0].url : ''
                         };
                         window.OCTAVE.queue.push(nextTrack);
                         window.playTrackByIndex(window.OCTAVE.queue.length - 1);
@@ -207,6 +232,60 @@ async function playNextLogic() {
     }
 }
 window.playNext = playNextLogic;
+
+// --- DISCOVER MIX GENERATOR ---
+window.generateDiscoverMix = async () => {
+    const baseTracks =[...Object.values(window.OCTAVE.liked), ...window.OCTAVE.recentPlayed.slice(0, 10)];
+    if (baseTracks.length === 0) {
+        alert("Play or like some songs first to build your taste profile!");
+        return;
+    }
+
+    const dynamicView = document.getElementById('dynamic-view');
+    const originalHTML = dynamicView.innerHTML;
+    dynamicView.innerHTML = '<div style="padding: 100px 20px; text-align:center;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce" style="font-size: 40px; color: var(--accent); margin-bottom: 20px;"></i><h2>Brewing your mix...</h2><p style="color:var(--text-secondary);font-size:14px;margin-top:10px;">Analyzing taste profile via open API graph.</p></div>';
+
+    const seeds =[];
+    for(let i=0; i<3; i++) seeds.push(baseTracks[Math.floor(Math.random()*baseTracks.length)]);
+    
+    const newQueue =[];
+    const seenIds = new Set();
+
+    for (const seed of seeds) {
+        if(!seed) continue;
+        for (let i = 0; i < INVIDIOUS.length; i++) {
+            const base = INVIDIOUS[(invIdx + i) % INVIDIOUS.length];
+            try {
+                const r = await fetch(`${base}/api/v1/videos/${seed.videoId}?fields=recommendedVideos`);
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.recommendedVideos) {
+                        d.recommendedVideos.slice(0, 6).forEach(rec => {
+                            if(!seenIds.has(rec.videoId)) {
+                                seenIds.add(rec.videoId);
+                                newQueue.push({
+                                    videoId: rec.videoId, title: rec.title, author: rec.author,
+                                    thumb: (rec.videoThumbnails && rec.videoThumbnails.length > 0) ? rec.videoThumbnails[0].url : ''
+                                });
+                            }
+                        });
+                    }
+                    break; 
+                }
+            } catch(e) { continue; }
+        }
+    }
+
+    if (newQueue.length > 0) {
+        newQueue.sort(() => 0.5 - Math.random());
+        window.OCTAVE.queue = newQueue;
+        window.playTrackByIndex(0);
+        document.querySelector('.nav-item.active').click(); 
+    } else {
+        dynamicView.innerHTML = originalHTML;
+        alert("Algorithm failed to connect to network. Try again.");
+    }
+};
 
 window.playPlaylist = (plName) => {
     const pl = window.OCTAVE.playlists[plName];
@@ -308,7 +387,7 @@ window.performSearch = async (query) => {
             }));
         } catch(e) { continue; }
     }
-    return [];
+    return[];
 };
 
 window.setSleepTimer = (minutes) => {
@@ -393,7 +472,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.clientY - rect.top <= 10) { e.stopPropagation(); seekToPosition(e, document.querySelector('.mini-player')); }
     });
 
-    // --- NEW: BINDINGS FOR LYRICS, BIO, QUEUE, TIMER ---
     const fpPanel = document.getElementById('fp-overlay-panel');
     const fpContent = document.getElementById('fp-overlay-content');
     const fpTitle = document.getElementById('fp-overlay-title');
