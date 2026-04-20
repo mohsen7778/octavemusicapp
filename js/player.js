@@ -1,18 +1,17 @@
 window.OCTAVE = {
     queue: [], currentIndex: -1, isPlaying: false,
     liked: {}, playlists: {}, recentPlayed: [], recentSearches: [],
-    playStats: {}, // NEW: Tracks how many times every song is played
-    activeTrackForOptions: null
+    playStats: {}, activeTrackForOptions: null
 };
 
-// --- CACHE SYSTEM ---
+// --- CACHE & VAULT SYSTEM ---
 function saveCache() {
     localStorage.setItem('octave_data', JSON.stringify({
         liked: window.OCTAVE.liked,
         playlists: window.OCTAVE.playlists,
         recentPlayed: window.OCTAVE.recentPlayed.slice(0, 30),
         recentSearches: window.OCTAVE.recentSearches.slice(0, 30),
-        playStats: window.OCTAVE.playStats, // Save stats
+        playStats: window.OCTAVE.playStats,
         queue: window.OCTAVE.queue,
         currentIndex: window.OCTAVE.currentIndex
     }));
@@ -33,12 +32,40 @@ function loadCache() {
 }
 loadCache();
 
+window.exportVault = () => {
+    const data = localStorage.getItem('octave_data') || "{}";
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "Octave_Data_Vault.json";
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+window.importVault = (event) => {
+    const file = event.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const json = JSON.parse(e.target.result);
+            if(json.playlists || json.liked) {
+                localStorage.setItem('octave_data', e.target.result);
+                alert('Data Vault Restored! Reloading app.');
+                location.reload();
+            }
+        } catch(err) { alert('Invalid Vault Backup File.'); }
+    };
+    reader.readAsText(file);
+};
+
 const INVIDIOUS = [
     'https://inv.nadeko.net', 'https://invidious.privacyredirect.com',
     'https://invidious.nerdvpn.de', 'https://iv.melmac.space', 'https://invidious.io.lol'
 ];
 let invIdx = 0;
-let YTP = null, ytReady = false, progressTimer = null;
+let YTP = null, ytReady = false, progressTimer = null, sleepTimerId = null;
 
 const script = document.createElement('script');
 script.src = 'https://www.youtube.com/iframe_api';
@@ -122,9 +149,7 @@ window.playTrackByIndex = (index) => {
     window.OCTAVE.currentIndex = index;
     const track = window.OCTAVE.queue[index];
     
-    // Track stats for the Heavy Duty Algorithm
     window.OCTAVE.playStats[track.videoId] = (window.OCTAVE.playStats[track.videoId] || 0) + 1;
-    
     window.OCTAVE.recentPlayed = [track, ...window.OCTAVE.recentPlayed.filter(t => t.videoId !== track.videoId)];
     saveCache();
     
@@ -145,7 +170,6 @@ window.playTrackByIndex = (index) => {
 
 window.playTrack = (track) => {
     window.OCTAVE.recentSearches = [track, ...window.OCTAVE.recentSearches.filter(t => t.videoId !== track.videoId)];
-    
     const existIdx = window.OCTAVE.queue.findIndex(t => t.videoId === track.videoId);
     if (existIdx >= 0) {
         window.playTrackByIndex(existIdx);
@@ -193,24 +217,19 @@ async function playNextLogic() {
 }
 window.playNext = playNextLogic;
 
-// --- PLAYLIST LOGIC & SMART SHUFFLE ALGORITHM ---
 window.playPlaylist = (plName) => {
     const pl = window.OCTAVE.playlists[plName];
-    if (pl && pl.length > 0) {
-        window.OCTAVE.queue = [...pl];
-        window.playTrackByIndex(0);
-    }
+    if (pl && pl.length > 0) { window.OCTAVE.queue = [...pl]; window.playTrackByIndex(0); }
 };
 
 window.smartShufflePlaylist = (plName) => {
     const pl = window.OCTAVE.playlists[plName];
     if (pl && pl.length > 0) {
-        // Sorts by historical play count (most played first)
         let sorted = [...pl].sort((a, b) => {
             const countA = window.OCTAVE.playStats[a.videoId] || 0;
             const countB = window.OCTAVE.playStats[b.videoId] || 0;
             if (countB !== countA) return countB - countA;
-            return 0.5 - Math.random(); // Shuffles ties
+            return 0.5 - Math.random(); 
         });
         window.OCTAVE.queue = sorted;
         window.playTrackByIndex(0);
@@ -244,7 +263,6 @@ function updatePlayerUI(track) {
     document.getElementById('mini-like-btn').innerHTML = isLiked ? '<i class="fa-solid fa-heart" style="color:var(--accent);"></i>' : '<i class="fa-regular fa-heart"></i>';
     document.getElementById('fp-like').innerHTML = isLiked ? '<i class="fa-solid fa-heart" style="color:var(--accent);"></i>' : '<i class="fa-regular fa-heart"></i>';
     
-    // Automatically re-render currently viewed playlist screen to update stats instantly
     if(document.getElementById('playlist-detail-list')) {
         const activeNav = document.querySelector('.nav-item.active').getAttribute('data-tab');
         if (activeNav === 'home' || activeNav === 'library') window.renderHome(); 
@@ -252,11 +270,8 @@ function updatePlayerUI(track) {
 }
 
 window.toggleLike = (track) => {
-    if (window.OCTAVE.liked[track.videoId]) {
-        delete window.OCTAVE.liked[track.videoId];
-    } else {
-        window.OCTAVE.liked[track.videoId] = track;
-    }
+    if (window.OCTAVE.liked[track.videoId]) { delete window.OCTAVE.liked[track.videoId]; } 
+    else { window.OCTAVE.liked[track.videoId] = track; }
     saveCache();
     updatePlayerUI(track);
     if(window.renderHome) window.renderHome();
@@ -266,16 +281,9 @@ document.querySelector('.play-btn-mini').addEventListener('click', (e) => { e.st
 document.getElementById('fp-play').addEventListener('click', window.togglePlay);
 document.getElementById('fp-next').addEventListener('click', playNextLogic);
 document.getElementById('fp-prev').addEventListener('click', window.playPrev);
+document.getElementById('mini-like-btn').addEventListener('click', (e) => { e.stopPropagation(); if(window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]); });
+document.getElementById('fp-like').addEventListener('click', () => { if(window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]); });
 
-document.getElementById('mini-like-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    if(window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
-});
-document.getElementById('fp-like').addEventListener('click', () => {
-    if(window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
-});
-
-// Track Seeking
 function seekToPosition(e, containerElement) {
     if (!YTP || window.OCTAVE.currentIndex === -1) return;
     const rect = containerElement.getBoundingClientRect();
@@ -309,4 +317,41 @@ window.performSearch = async (query) => {
         } catch(e) { continue; }
     }
     return [];
+};
+
+// --- MEGA UPDATE: SLEEP TIMER ---
+window.setSleepTimer = (minutes) => {
+    if(sleepTimerId) clearTimeout(sleepTimerId);
+    if(minutes === 0) { 
+        alert('Sleep timer cancelled.'); 
+        document.getElementById('timer-modal').classList.remove('active');
+        return; 
+    }
+    alert(`Sleep timer set. Audio will pause in ${minutes} minutes.`);
+    document.getElementById('timer-modal').classList.remove('active');
+    sleepTimerId = setTimeout(() => {
+        if(window.OCTAVE.isPlaying) window.togglePlay();
+    }, minutes * 60000);
+};
+
+// --- MEGA UPDATE: LYRICS & BIO FETCHERS ---
+window.fetchLyrics = async (artist, title) => {
+    try {
+        const cleanTitle = title.replace(/\(.*?\)/g, '').split('-')[0].trim();
+        const cleanArtist = artist.replace(/ - Topic/g, '').trim();
+        const r = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`);
+        if(!r.ok) return "Lyrics not found in global database.";
+        const d = await r.json();
+        return d.lyrics || "Lyrics not found.";
+    } catch(e) { return "Error connecting to lyrics server."; }
+};
+
+window.fetchArtistBio = async (artist) => {
+    try {
+        const cleanArtist = artist.replace(/ - Topic/g, '').trim();
+        const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanArtist)}`);
+        if(!r.ok) return "Artist biography not available.";
+        const d = await r.json();
+        return d.extract || "Artist biography not available.";
+    } catch(e) { return "Error connecting to encyclopedia."; }
 };
