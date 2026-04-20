@@ -827,3 +827,41 @@ body {
 .fp-controls {
     margin-bottom: 20px;
 }
+/* --- TIGHTENED FULL PLAYER LAYOUT --- */
+.full-player-overlay {
+    padding: 10px 20px 20px 20px !important;
+    justify-content: space-between;
+}
+
+.fp-art-container {
+    max-height: 35vh; /* Prevents overflow */
+    margin: 10px 0;
+}
+
+#fp-art {
+    max-height: 100%;
+    width: auto;
+    object-fit: contain;
+}
+
+.fp-info-row {
+    margin-bottom: 5px;
+}
+
+/* 30% Smaller Lyrics/Queue row */
+.fp-actions-grid {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 40px;
+    transform: scale(0.7); /* Reduces size by 30% */
+    transform-origin: center;
+    margin: -10px 0;
+}
+
+.fp-progress-section {
+    margin-top: 10px;
+}
+
+.fp-controls {
+    margin-bottom: 10px;
+}
