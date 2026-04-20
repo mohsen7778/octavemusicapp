@@ -13,9 +13,7 @@
 <body>
 
     <div class="mobile-app">
-        
         <main class="main-content scroll-y" id="dynamic-view">
-            
             <header class="app-header">
                 <div class="greeting">
                     <h1 id="time-greeting">Good afternoon</h1>
@@ -42,10 +40,8 @@
                     <h2 class="section-title" style="margin-bottom: 0;">Your Heavy Duty Mixes</h2>
                     <button class="icon-btn" id="open-create-playlist"><i class="fa-solid fa-plus"></i></button>
                 </div>
-                <div class="vertical-list" id="home-playlists">
-                    </div>
+                <div class="vertical-list" id="home-playlists"></div>
             </section>
-            
             <div class="bottom-spacer"></div>
         </main>
 
@@ -94,11 +90,24 @@
             </div>
             
             <div class="fp-controls">
-                <button class="icon-btn sm"><i class="fa-solid fa-shuffle"></i></button>
-                <button class="icon-btn" id="fp-prev"><i class="fa-solid fa-backward-step"></i></button>
+                <button class="icon-btn sm" id="fp-prev"><i class="fa-solid fa-backward-step"></i></button>
                 <button class="play-btn-huge" id="fp-play"><i class="fa-solid fa-play"></i></button>
-                <button class="icon-btn" id="fp-next"><i class="fa-solid fa-forward-step"></i></button>
-                <button class="icon-btn sm"><i class="fa-solid fa-repeat"></i></button>
+                <button class="icon-btn sm" id="fp-next"><i class="fa-solid fa-forward-step"></i></button>
+            </div>
+
+            <div class="fp-action-row">
+                <button class="icon-btn" id="fp-lyrics-btn"><i class="fa-solid fa-align-left"></i></button>
+                <button class="icon-btn" id="fp-bio-btn"><i class="fa-solid fa-book-open"></i></button>
+                <button class="icon-btn" id="fp-queue-btn"><i class="fa-solid fa-list-ol"></i></button>
+                <button class="icon-btn" id="fp-timer-btn"><i class="fa-solid fa-clock"></i></button>
+            </div>
+
+            <div id="fp-overlay-panel" class="full-overlay-panel">
+                <div class="panel-header">
+                    <h2 id="fp-overlay-title">Title</h2>
+                    <button class="icon-btn" id="close-fp-overlay"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="fp-overlay-content" class="scroll-y" style="flex: 1; padding-bottom: 20px;"></div>
             </div>
         </div>
 
@@ -116,6 +125,10 @@
                 <button class="icon-btn" id="close-menu"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="drawer-links">
+                <div class="drawer-item" id="export-vault-btn"><i class="fa-solid fa-download"></i> Backup Vault</div>
+                <div class="drawer-item" id="import-vault-btn"><i class="fa-solid fa-upload"></i> Restore Vault</div>
+                <input type="file" id="import-vault-input" style="display:none" accept=".json">
+                <div style="height: 1px; background: var(--glass-border); margin: 10px 0;"></div>
                 <div class="drawer-item" data-page="terms.html"><i class="fa-solid fa-scale-balanced"></i> Terms & Conditions</div>
                 <div class="drawer-item" data-page="contact.html"><i class="fa-brands fa-instagram"></i> Contact Support</div>
             </div>
@@ -130,6 +143,19 @@
                     <button class="btn-secondary" id="close-brave">Maybe Later</button>
                     <a href="https://play.google.com/store/apps/details?id=com.brave.browser" target="_blank" class="btn-primary" id="get-brave" style="color: var(--bg-deep); text-decoration: none;">Get Brave</a>
                 </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="timer-modal">
+            <div class="modal-content glass-panel shadow-heavy" style="text-align: center;">
+                <h3 style="margin-bottom: 16px;">Sleep Timer</h3>
+                <div class="vertical-list">
+                    <div class="drawer-item" style="justify-content: center;" onclick="window.setSleepTimer(15)">15 Minutes</div>
+                    <div class="drawer-item" style="justify-content: center;" onclick="window.setSleepTimer(30)">30 Minutes</div>
+                    <div class="drawer-item" style="justify-content: center;" onclick="window.setSleepTimer(60)">60 Minutes</div>
+                    <div class="drawer-item" style="justify-content: center; color: #ff4444;" onclick="window.setSleepTimer(0)">Turn Off Timer</div>
+                </div>
+                <button class="btn-secondary" style="margin-top: 16px; width: 100%;" id="close-timer">Cancel</button>
             </div>
         </div>
 
