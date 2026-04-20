@@ -58,18 +58,45 @@ window.playPrev = () => { if (YTP && YTP.getCurrentTime() > 3) YTP.seekTo(0); el
 
 async function playNextLogic() {
     if (window.OCTAVE.currentIndex < window.OCTAVE.queue.length - 1) window.playTrackByIndex(window.OCTAVE.currentIndex + 1);
-    else { /* Logic to fetch recommended */ }
 }
 window.playNext = playNextLogic;
 
 function updatePlayerUI(track) {
-    document.getElementById('mini-title-el') && (document.getElementById('mini-title-el').textContent = track.title);
-    document.getElementById('mini-artist-el') && (document.getElementById('mini-artist-el').textContent = track.author);
-    document.getElementById('mini-art-el') && (document.getElementById('mini-art-el').style.backgroundImage = `url(${track.thumb})`);
-    document.getElementById('fp-title') && (document.getElementById('fp-title').textContent = track.title);
-    document.getElementById('fp-artist') && (document.getElementById('fp-artist').innerHTML = `${track.author} <i class="fa-solid fa-chevron-right" style="font-size: 10px;"></i>`);
-    document.getElementById('fp-art') && (document.getElementById('fp-art').src = track.thumb);
+    const els = { mT: document.getElementById('mini-title-el'), mA: document.getElementById('mini-artist-el'), mArt: document.getElementById('mini-art-el'), fT: document.getElementById('fp-title'), fA: document.getElementById('fp-artist'), fArt: document.getElementById('fp-art'), mL: document.getElementById('mini-like-btn'), fL: document.getElementById('fp-like') };
+    if(els.mT) els.mT.textContent = track.title;
+    if(els.mA) els.mA.textContent = track.author;
+    if(els.mArt) els.mArt.style.backgroundImage = `url(${track.thumb})`;
+    if(els.fT) els.fT.textContent = track.title;
+    if(els.fA) els.fA.innerHTML = `${track.author} <i class="fa-solid fa-chevron-right" style="font-size: 10px;"></i>`;
+    if(els.fArt) els.fArt.src = track.thumb;
     document.getElementById('fp-ambient-bg') && (document.getElementById('fp-ambient-bg').style.backgroundImage = `url(${track.thumb})`);
+
+    const isLiked = !!window.OCTAVE.liked[track.videoId];
+    const likeHTML = isLiked ? '<i class="fa-solid fa-heart" style="color:var(--accent);"></i>' : '<i class="fa-regular fa-heart"></i>';
+    if(els.mL) els.mL.innerHTML = likeHTML;
+    if(els.fL) els.fL.innerHTML = likeHTML;
+}
+
+window.toggleLike = (track) => {
+    if (window.OCTAVE.liked[track.videoId]) delete window.OCTAVE.liked[track.videoId];
+    else window.OCTAVE.liked[track.videoId] = track;
+    saveCache(); updatePlayerUI(track);
+    if(window.renderHome) window.renderHome();
+};
+
+function seekToPosition(e, containerElement) {
+    if (!YTP || window.OCTAVE.currentIndex === -1 || !containerElement) return;
+    const rect = containerElement.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+    const totalTime = YTP.getDuration();
+    if (totalTime > 0) {
+        YTP.seekTo(totalTime * percentage, true);
+        const fpFill = document.getElementById('fp-progress-fill');
+        const miniFill = document.getElementById('mini-progress');
+        if(fpFill) fpFill.style.width = `${percentage * 100}%`;
+        if(miniFill) miniFill.style.width = `${percentage * 100}%`;
+    }
 }
 
 window.setSleepTimer = (minutes) => {
@@ -78,8 +105,10 @@ window.setSleepTimer = (minutes) => {
 };
 
 window.fetchLyrics = async (artist, title) => {
+    const cleanTitle = title.replace(/\(.*?\)/g, '').split('-')[0].trim();
+    const cleanArtist = artist.replace(/ - Topic/g, '').trim();
     try {
-        const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
+        const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanArtist + ' ' + cleanTitle)}`);
         const data = await r.json();
         return (data && data[0]?.plainLyrics) ? data[0].plainLyrics : "Lyrics not found.";
     } catch(e) { return "Lyrics Error."; }
@@ -94,11 +123,13 @@ window.fetchArtistBio = async (artist) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Basic Controls
     document.querySelector('.play-btn-mini')?.addEventListener('click', (e) => { e.stopPropagation(); window.togglePlay(); });
     document.getElementById('fp-play')?.addEventListener('click', window.togglePlay);
     document.getElementById('fp-next')?.addEventListener('click', playNextLogic);
     document.getElementById('fp-prev')?.addEventListener('click', window.playPrev);
+    document.getElementById('mini-like-btn')?.addEventListener('click', (e) => { e.stopPropagation(); if(window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]); });
+    document.getElementById('fp-like')?.addEventListener('click', () => { if(window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]); });
+    document.getElementById('fp-progress-container')?.addEventListener('click', (e) => seekToPosition(e, document.getElementById('fp-progress-container')));
     
     // Bind Overlays
     document.getElementById('fp-lyrics-btn')?.addEventListener('click', async () => {
