@@ -195,11 +195,16 @@ window.renderHome = () => {
 
     const likedCount = Object.keys(window.OCTAVE.liked).length;
     playlistsDiv.innerHTML = `
+        <div class="list-item" id="open-discover-mix" style="margin-bottom: 8px;">
+            <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, #8a2387, #e94057, #f27121); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="list-info"><div class="list-title">Auto-DJ Discover Mix</div><div class="list-subtitle">Endless tracks based on your taste</div></div>
+        </div>
         <div class="list-item" id="open-liked-songs">
             <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, var(--accent), #0b5c26); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;"><i class="fa-solid fa-heart"></i></div>
             <div class="list-info"><div class="list-title">Liked Songs</div><div class="list-subtitle">${likedCount} tracks saved</div></div>
         </div>
     `;
+    document.getElementById('open-discover-mix').addEventListener('click', window.generateDiscoverMix);
     document.getElementById('open-liked-songs').addEventListener('click', window.renderLikedSongs);
     
     Object.keys(window.OCTAVE.playlists).forEach(plName => {
@@ -354,7 +359,7 @@ function bindHomeModals() {
     document.getElementById('save-playlist').addEventListener('click', () => {
         const name = document.getElementById('playlist-name').value.trim();
         if(name !== '' && !window.OCTAVE.playlists[name]) {
-            window.OCTAVE.playlists[name] = [];
+            window.OCTAVE.playlists[name] =[];
             localStorage.setItem('octave_data', JSON.stringify({ ...JSON.parse(localStorage.getItem('octave_data')||'{}'), playlists: window.OCTAVE.playlists }));
             document.getElementById('playlist-name').value = '';
             plModal.classList.remove('active');
