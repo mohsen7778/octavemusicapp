@@ -129,4 +129,4 @@ Telegram: https://t.me/ucvezw
 
 ---
 
-#MusicPlayer #WebAudio #Frontend #NoBackend #MusicStreaming
+#MusicPlayer #WebAudio #Frontend #NoBackend #MusicStreaming #SpotifyAlternative #FreeMusicPlayer #OpenSourceMusicPlayer 
