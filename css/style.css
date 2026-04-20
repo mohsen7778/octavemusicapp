@@ -311,6 +311,7 @@ body {
 .nav-item.active i {
     transform: scale(1.1);
 }
+
 /* --- DYNAMIC VIEWS (SEARCH & LIBRARY) --- */
 .search-header { 
     padding: 40px 20px 20px 20px; 
@@ -402,7 +403,6 @@ body {
     color: var(--text-secondary); 
 }
 
-/* Loading Spinner for Search */
 .spinner { 
     border: 3px solid rgba(255,255,255,0.1); 
     border-top-color: var(--accent); 
@@ -416,10 +416,11 @@ body {
 @keyframes spin { 
     to { transform: rotate(360deg); } 
 }
+
 /* --- FULL SCREEN NOW PLAYING PAGE --- */
 .full-player-overlay {
     position: fixed;
-    top: 100vh; /* Hidden below screen initially */
+    top: 100vh;
     left: 0;
     width: 100%;
     height: 100vh;
@@ -462,7 +463,7 @@ body {
     height: 100%;
     object-fit: cover;
     border-radius: 12px;
-    display: none; /* Hidden until loaded */
+    display: none;
 }
 
 .fp-info-row {
@@ -552,8 +553,8 @@ body {
     align-items: center;
     box-shadow: 0 8px 24px rgba(30, 215, 96, 0.3);
 }
-/* --- MODALS & UI OVERLAYS --- */
 
+/* --- MODALS & UI OVERLAYS --- */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
@@ -712,6 +713,7 @@ body {
 .drawer-item:hover, .drawer-item:active {
     background: rgba(255,255,255,0.05);
 }
+
 /* --- Z-INDEX FIXES & OVERLAYS --- */
 .drawer-backdrop { z-index: 3000 !important; }
 .side-drawer { z-index: 3001 !important; }
@@ -732,7 +734,7 @@ body {
     text-align: center;
     padding: 20px 0;
 }
-/* --- MEGA UPDATE OVERLAYS & ACTIONS --- */
+
 .fp-action-row { 
     display: flex; 
     justify-content: center; 
@@ -783,101 +785,19 @@ body {
     white-space: pre-wrap; 
     padding-bottom: 40px; 
 }
-/* --- BEAUTIFUL FULL PLAYER LAYOUT --- */
+
 .full-player-overlay {
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding-bottom: 40px; /* Gives breathing room for navigation bars */
-}
-
-.fp-art-container {
-    flex: 1;
-    max-height: 40vh; /* Keeps art from pushing controls off-screen */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-#fp-art {
-    max-height: 100%;
-    width: auto;
-    border-radius: 12px;
-}
-
-.fp-actions-grid {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 40px;
-}
-
-.fp-actions-grid .icon-btn {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 16px;
-    color: var(--text-secondary);
-}
-
-.fp-progress-section {
-    margin-top: auto;
-    margin-bottom: 10px;
-}
-
-.fp-controls {
-    margin-bottom: 20px;
-}
-/* --- TIGHTENED FULL PLAYER LAYOUT --- */
-.full-player-overlay {
-    padding: 10px 20px 20px 20px !important;
-    justify-content: space-between;
-}
-
-.fp-art-container {
-    max-height: 35vh; /* Prevents overflow */
-    margin: 10px 0;
-}
-
-#fp-art {
-    max-height: 100%;
-    width: auto;
-    object-fit: contain;
-}
-
-.fp-info-row {
-    margin-bottom: 5px;
-}
-
-/* 30% Smaller Lyrics/Queue row */
-.fp-actions-grid {
-    display: flex;
-    justify-content: space-between;
-    padding: 0 40px;
-    transform: scale(0.7); /* Reduces size by 30% */
-    transform-origin: center;
-    margin: -10px 0;
-}
-
-.fp-progress-section {
-    margin-top: 10px;
-}
-
-.fp-controls {
-    margin-bottom: 10px;
-}
-/* --- SPOTIFY-STYLE TIGHT LAYOUT --- */
-.full-player-overlay {
-    display: flex;
-    flex-direction: column;
-    padding: 10px 20px 30px 20px !important; /* Extra bottom padding for nav */
+    padding: 10px 20px 30px 20px !important; 
     height: 100vh;
     box-sizing: border-box;
-    overflow: hidden; /* No scrolling */
+    overflow: hidden; 
 }
 
 .fp-art-container {
     flex: 0 1 auto; 
-    max-height: 35vh; /* ART SHRINKS TO FIT */
+    max-height: 35vh; 
     margin: 10px auto;
     display: flex;
     justify-content: center;
@@ -897,7 +817,6 @@ body {
     margin: 10px 0;
 }
 
-/* Lyrics/Queue buttons 30% smaller */
 .fp-actions-grid {
     display: flex;
     justify-content: space-between;
@@ -918,28 +837,16 @@ body {
     gap: 40px;
     margin-bottom: 20px;
 }
-/* --- PREMIUM LIQUID LAYOUT --- */
+
 .full-player-overlay {
     position: fixed;
     top: 100vh; left: 0; width: 100%; height: 100%;
-    background: var(--bg-deep); /* Base dark background */
+    background: var(--bg-deep); 
     padding: 10px 20px 20px 20px !important;
     display: flex;
     flex-direction: column;
     z-index: 1000;
     transition: top 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-/* Liquid Ambient Background */
-.ambient-bg {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    z-index: -1;
-    filter: blur(60px) saturate(200%);
-    opacity: 0.3;
-    pointer-events: none;
-    background-size: cover;
-    background-position: center;
 }
 
 .fp-art-container {
@@ -948,7 +855,7 @@ body {
     align-items: center;
     justify-content: center;
     margin: 10px 0;
-    min-height: 0; /* Critical for preventing overflow */
+    min-height: 0; 
 }
 
 #fp-art {
@@ -984,6 +891,7 @@ body {
     padding: 0 20px;
     margin-bottom: 10px;
 }
+
 /* --- SPLASH SCREEN --- */
 .splash-screen {
     position: fixed;
@@ -1002,8 +910,9 @@ body {
     height: 110px;
     border-radius: 24px;
     margin-bottom: 24px;
-    box-shadow: 0 10px 30px rgba(30, 215, 96, 0.2); /* Soft green glow */
+    box-shadow: 0 10px 30px rgba(30, 215, 96, 0.2);
     animation: splashPulse 2s infinite ease-in-out;
+    object-fit: cover;
 }
 
 .splash-text {
@@ -1020,4 +929,4 @@ body {
     0% { transform: scale(1); }
     50% { transform: scale(1.08); }
     100% { transform: scale(1); }
-}
+    }
