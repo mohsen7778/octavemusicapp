@@ -188,6 +188,15 @@ if (fpOptionsBtn) {
 }
 
 window.renderHome = () => {
+    // --- DYNAMIC TIME GREETING LOGIC ---
+    const hour = new Date().getHours();
+    let greeting = 'Good evening';
+    if (hour >= 5 && hour < 12) greeting = 'Good morning';
+    else if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
+    const greetingEl = document.getElementById('time-greeting');
+    if (greetingEl) greetingEl.textContent = greeting;
+    // -----------------------------------
+
     const recentGrid = document.getElementById('home-recent-grid');
     const playlistsDiv = document.getElementById('home-playlists');
     if (!recentGrid || !playlistsDiv) return;
