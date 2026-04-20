@@ -78,10 +78,10 @@
                 </div>
                 <button class="icon-btn" id="fp-like"><i class="fa-regular fa-heart"></i></button>
             </div>
-            
-            <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px; margin-bottom: -5px;">
-                <button class="icon-btn" id="fp-lyrics-btn" style="font-size: 13px; color: var(--text-secondary); width: auto; gap: 8px; display: flex; align-items: center;"><i class="fa-solid fa-align-left"></i> Lyrics</button>
-                <button class="icon-btn" id="fp-queue-btn" style="font-size: 13px; color: var(--text-secondary); width: auto; gap: 8px; display: flex; align-items: center;"><i class="fa-solid fa-list-ol"></i> Up Next</button>
+
+            <div class="fp-actions-grid">
+                <button class="icon-btn" id="fp-lyrics-btn"><i class="fa-solid fa-align-left"></i> <span>Lyrics</span></button>
+                <button class="icon-btn" id="fp-queue-btn"><i class="fa-solid fa-list-ol"></i> <span>Up Next</span></button>
             </div>
 
             <div class="fp-progress-section">
@@ -94,7 +94,7 @@
                 </div>
             </div>
             
-            <div class="fp-controls" style="margin-top: 20px;">
+            <div class="fp-controls">
                 <button class="icon-btn sm" id="fp-prev"><i class="fa-solid fa-backward-step"></i></button>
                 <button class="play-btn-huge" id="fp-play"><i class="fa-solid fa-play"></i></button>
                 <button class="icon-btn sm" id="fp-next"><i class="fa-solid fa-forward-step"></i></button>
@@ -187,7 +187,6 @@
                 <button class="btn-secondary" style="width: 100%;" id="close-select-playlist">Cancel</button>
             </div>
         </div>
-
     </div>
 
     <script src="js/player.js"></script>
