@@ -52,17 +52,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     handleBravePrompt();
-    bindMenuLogic();
     bindHomeModals();
-    window.renderHome(); // Initial render
+    window.renderHome(); 
     
-    // Mini to Full Player mapping
     document.querySelector('.mini-inner').addEventListener('click', () => document.getElementById('full-player').classList.add('active'));
     document.getElementById('close-fp').addEventListener('click', () => document.getElementById('full-player').classList.remove('active'));
-
-    // Global Option Modals
     document.getElementById('close-track-options').addEventListener('click', () => document.getElementById('track-options-modal').classList.remove('active'));
     document.getElementById('close-select-playlist').addEventListener('click', () => document.getElementById('select-playlist-modal').classList.remove('active'));
+});
+
+// --- EVENT DELEGATION (Fixes the Hamburger Bug permanently) ---
+document.body.addEventListener('click', (e) => {
+    // Open Hamburger
+    if (e.target.closest('#menu-btn')) {
+        document.getElementById('side-menu').classList.add('active');
+        document.getElementById('menu-backdrop').classList.add('active');
+    }
+    // Close Hamburger
+    if (e.target.closest('#close-menu') || e.target.closest('#menu-backdrop')) {
+        document.getElementById('side-menu').classList.remove('active');
+        document.getElementById('menu-backdrop').classList.remove('active');
+    }
 });
 
 // --- RENDER FUNCTIONS ---
@@ -71,7 +81,6 @@ window.renderHome = () => {
     const playlistsDiv = document.getElementById('home-playlists');
     if (!recentGrid || !playlistsDiv) return;
 
-    // Render Recent Played
     if (window.OCTAVE.recentPlayed.length > 0) {
         recentGrid.innerHTML = '';
         window.OCTAVE.recentPlayed.forEach(track => {
@@ -86,15 +95,11 @@ window.renderHome = () => {
         });
     }
 
-    // Render Playlists (Liked is default)
     const likedCount = Object.keys(window.OCTAVE.liked).length;
     playlistsDiv.innerHTML = `
         <div class="list-item" onclick="alert('Liked tracks view coming soon')">
             <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, var(--accent), #0b5c26); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;"><i class="fa-solid fa-heart"></i></div>
-            <div class="list-info">
-                <div class="list-title">Liked Songs</div>
-                <div class="list-subtitle">${likedCount} tracks saved</div>
-            </div>
+            <div class="list-info"><div class="list-title">Liked Songs</div><div class="list-subtitle">${likedCount} tracks saved</div></div>
         </div>
     `;
     
@@ -104,11 +109,15 @@ window.renderHome = () => {
         el.className = 'list-item';
         el.innerHTML = `
             <div class="list-art shadow-heavy" style="background: #2a2d36; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-secondary);"><i class="fa-solid fa-list"></i></div>
-            <div class="list-info">
-                <div class="list-title">${plName}</div>
-                <div class="list-subtitle">${pl.length} tracks</div>
-            </div>
+            <div class="list-info"><div class="list-title">${plName}</div><div class="list-subtitle">${pl.length} tracks</div></div>
+            <button class="icon-btn" style="color: var(--text-secondary);"><i class="fa-solid fa-play"></i></button>
         `;
+        el.addEventListener('click', () => {
+            if(pl.length > 0) {
+                window.OCTAVE.queue = [...pl];
+                window.playTrackByIndex(0);
+            }
+        });
         playlistsDiv.appendChild(el);
     });
 };
@@ -143,15 +152,13 @@ function bindSearch() {
     const resContainer = document.getElementById('searchResults');
     const recentList = document.getElementById('search-recent-list');
     
-    // Populate Recent Searches
     if(recentList) {
         if(window.OCTAVE.recentSearches.length === 0) {
             recentList.innerHTML = '<div class="empty-state-text">No recent searches.</div>';
         } else {
             recentList.innerHTML = '';
             window.OCTAVE.recentSearches.forEach(track => {
-                const el = buildTrackItem(track);
-                recentList.appendChild(el);
+                recentList.appendChild(buildTrackItem(track));
             });
         }
     }
@@ -200,7 +207,7 @@ function buildTrackItem(track) {
     `;
     
     el.addEventListener('click', (e) => {
-        if(e.target.closest('.track-opts-btn')) return; // Ignore if dots clicked
+        if(e.target.closest('.track-opts-btn')) return; 
         window.playTrack(track);
     });
 
@@ -212,32 +219,7 @@ function buildTrackItem(track) {
     return el;
 }
 
-// --- MENUS & MODALS ---
-function bindMenuLogic() {
-    const menuBtn = document.getElementById('menu-btn');
-    const sideMenu = document.getElementById('side-menu');
-    const backdrop = document.getElementById('menu-backdrop');
-    
-    menuBtn.addEventListener('click', () => {
-        sideMenu.classList.add('active');
-        backdrop.classList.add('active');
-    });
-
-    const hideDrawer = () => {
-        sideMenu.classList.remove('active');
-        backdrop.classList.remove('active');
-    };
-    
-    document.getElementById('close-menu').addEventListener('click', hideDrawer);
-    backdrop.addEventListener('click', hideDrawer);
-
-    document.getElementById('open-terms').addEventListener('click', () => {
-        hideDrawer();
-        document.getElementById('terms-modal').classList.add('active');
-    });
-    document.getElementById('close-terms').addEventListener('click', () => document.getElementById('terms-modal').classList.remove('active'));
-}
-
+// --- MODALS ---
 function handleBravePrompt() {
     if (!localStorage.getItem('bravePromptShown')) {
         setTimeout(() => document.getElementById('brave-modal').classList.add('active'), 1500);
