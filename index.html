@@ -11,7 +11,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
+
     <div class="mobile-app">
+        
         <main class="main-content scroll-y" id="dynamic-view">
             <header class="app-header">
                 <div class="greeting">
@@ -26,10 +28,14 @@
                     <div class="chip">Podcasts</div>
                 </div>
             </header>
+
             <section class="content-section">
                 <h2 class="section-title">Recently Played</h2>
-                <div class="horizontal-scroll scroll-x" id="home-recent-grid"></div>
+                <div class="horizontal-scroll scroll-x" id="home-recent-grid">
+                    <div style="color: var(--text-secondary); font-size: 13px; padding-bottom: 20px;">Play some tracks to build your history...</div>
+                </div>
             </section>
+
             <section class="content-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; padding-right: 20px; margin-bottom: 16px;">
                     <h2 class="section-title" style="margin-bottom: 0;">Your Heavy Duty Mixes</h2>
@@ -56,15 +62,16 @@
         </div>
 
         <div id="full-player" class="full-player-overlay">
-            <div id="fp-ambient-bg" class="ambient-bg"></div>
             <div class="fp-header">
                 <button class="icon-btn" id="close-fp"><i class="fa-solid fa-chevron-down"></i></button>
                 <span class="fp-header-title">Now Playing</span>
                 <button class="icon-btn" id="fp-options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             </div>
+            
             <div class="fp-art-container">
                 <img id="fp-art" src="" alt="Album Art">
             </div>
+            
             <div class="fp-info-row">
                 <div class="fp-meta">
                     <h2 id="fp-title">Nothing Playing</h2>
@@ -72,10 +79,12 @@
                 </div>
                 <button class="icon-btn" id="fp-like"><i class="fa-regular fa-heart"></i></button>
             </div>
+
             <div class="fp-actions-grid">
                 <button class="icon-btn" id="fp-lyrics-btn"><i class="fa-solid fa-align-left"></i> Lyrics</button>
                 <button class="icon-btn" id="fp-queue-btn"><i class="fa-solid fa-list-ol"></i> Up Next</button>
             </div>
+
             <div class="fp-progress-section">
                 <div class="fp-progress-bar" id="fp-progress-container">
                     <div class="fp-progress-fill" id="fp-progress-fill" style="width: 0%;"></div>
@@ -85,11 +94,13 @@
                     <span id="fp-time-total">0:00</span>
                 </div>
             </div>
+            
             <div class="fp-controls">
                 <button class="icon-btn sm" id="fp-prev"><i class="fa-solid fa-backward-step"></i></button>
                 <button class="play-btn-huge" id="fp-play"><i class="fa-solid fa-play"></i></button>
                 <button class="icon-btn sm" id="fp-next"><i class="fa-solid fa-forward-step"></i></button>
             </div>
+
             <div id="fp-overlay-panel" class="full-overlay-panel">
                 <div class="panel-header">
                     <h2 id="fp-overlay-title">Title</h2>
@@ -122,6 +133,18 @@
             </div>
         </div>
 
+        <div class="modal-overlay" id="brave-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <div style="font-size: 40px; color: #ff5000; margin-bottom: 16px; text-align: center;"><i class="fa-brands fa-brave"></i></div>
+                <h3 style="text-align: center; margin-bottom: 12px;">Use Brave Browser</h3>
+                <p style="color: var(--text-secondary); font-size: 14px; text-align: center; margin-bottom: 24px; line-height: 1.5;">For the ultimate heavy-duty experience with unkillable background play and zero ads, we strictly recommend launching Octave in Brave Browser.</p>
+                <div class="modal-actions">
+                    <button class="btn-secondary" id="close-brave">Maybe Later</button>
+                    <a href="https://play.google.com/store/apps/details?id=com.brave.browser" target="_blank" class="btn-primary" id="get-brave" style="color: var(--bg-deep); text-decoration: none;">Get Brave</a>
+                </div>
+            </div>
+        </div>
+
         <div class="modal-overlay" id="timer-modal">
             <div class="modal-content glass-panel shadow-heavy" style="text-align: center;">
                 <h3 style="margin-bottom: 16px;">Sleep Timer</h3>
@@ -134,11 +157,39 @@
                 <button class="btn-secondary" style="margin-top: 16px; width: 100%;" id="close-timer">Cancel</button>
             </div>
         </div>
-        <div class="modal-overlay" id="playlist-modal">...</div>
-        <div class="modal-overlay" id="track-options-modal">...</div>
-        <div class="modal-overlay" id="select-playlist-modal">...</div>
-        <div class="modal-overlay" id="brave-modal">...</div>
+
+        <div class="modal-overlay" id="playlist-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <h3 style="margin-bottom: 16px;">Create Playlist</h3>
+                <input type="text" id="playlist-name" class="modern-input" placeholder="Playlist Name (e.g. Gym Heavy)" autocomplete="off">
+                <div class="modal-actions" style="margin-top: 24px;">
+                    <button class="btn-secondary" id="close-playlist">Cancel</button>
+                    <button class="btn-primary" id="save-playlist" style="color: var(--bg-deep);">Create</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="track-options-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <div id="opt-track-info" style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); padding-bottom: 16px;"></div>
+                <div class="vertical-list">
+                    <div class="drawer-item" id="opt-like-track"><i class="fa-regular fa-heart"></i> <span>Like Track</span></div>
+                    <div class="drawer-item" id="opt-add-playlist"><i class="fa-solid fa-list"></i> <span>Add to Playlist</span></div>
+                    <div class="drawer-item" id="opt-sleep-timer"><i class="fa-solid fa-clock"></i> <span>Sleep Timer</span></div>
+                </div>
+                <button class="btn-secondary" style="margin-top: 16px; width: 100%;" id="close-track-options">Cancel</button>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="select-playlist-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <h3 style="margin-bottom: 16px;">Select Playlist</h3>
+                <div class="vertical-list scroll-y" id="playlist-selection-list" style="max-height: 250px; margin-bottom: 16px;"></div>
+                <button class="btn-secondary" style="width: 100%;" id="close-select-playlist">Cancel</button>
+            </div>
+        </div>
     </div>
+
     <script src="js/player.js"></script>
     <script src="js/app.js"></script>
 </body>
