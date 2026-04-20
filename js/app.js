@@ -1,182 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const dynamicView = document.getElementById('dynamic-view');
-    const views = {
-        home: dynamicView.innerHTML,
-        search: `
-            <header class="search-header" style="padding: 40px 20px 20px 20px; background: var(--bg-deep);">
-                <h1 class="search-title" style="font-size: 24px; font-weight: 700; margin-bottom: 16px;">Search</h1>
-                <div class="search-input-wrap" style="position: relative;">
-                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
-                    <input type="text" id="searchInput" placeholder="Search tracks..." autocomplete="off" style="width: 100%; background: var(--bg-surface); border: 1px solid var(--glass-border); padding: 14px 14px 14px 44px; border-radius: 8px; color: var(--text-primary); font-size: 14px; outline: none;">
-                </div>
-            </header>
-            <div id="searchResults" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
-                <div id="search-default-view">
-                    <h3 style="font-size: 16px; margin-bottom: 16px;">Recently Searched</h3>
-                    <div class="vertical-list" id="search-recent-list"></div>
-                </div>
-            </div>
-            <div class="bottom-spacer"></div>
-        `,
-        library: `
-            <header class="search-header" style="padding: 40px 20px 20px 20px;"><h1 class="search-title" style="font-size: 24px; font-weight: 700;">Library</h1></header>
-            <div id="lib-playlists" class="vertical-list" style="padding: 20px;"></div>
-            <div class="bottom-spacer"></div>
-        `,
-        premium: `
-            <div style="padding: 80px 20px; text-align: center;">
-                <i class="fa-solid fa-crown" style="font-size: 64px; color: var(--accent); margin-bottom: 24px;"></i>
-                <h2 style="font-size: 24px; margin-bottom: 12px;">Octave Premium</h2>
-                <p style="color: var(--text-secondary); font-size: 14px;">Ad-free background listening activated.</p>
-            </div>
-        `
-    };
-
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            document.querySelector('.nav-item.active').classList.remove('active');
-            item.classList.add('active');
-            const tab = item.getAttribute('data-tab');
-            
-            if (tab === 'home') {
-                dynamicView.innerHTML = views.home;
-                window.renderHome();
-                bindHomeModals();
-            } else {
-                dynamicView.innerHTML = views[tab];
-                if (tab === 'search') bindSearch();
-                if (tab === 'library') renderLibrary();
-            }
-        });
-    });
-
-    handleBravePrompt();
-    bindHomeModals();
-    window.renderHome(); 
-    
-    document.querySelector('.mini-inner').addEventListener('click', () => document.getElementById('full-player').classList.add('active'));
-    document.getElementById('close-fp').addEventListener('click', () => document.getElementById('full-player').classList.remove('active'));
-    document.getElementById('close-track-options').addEventListener('click', () => document.getElementById('track-options-modal').classList.remove('active'));
-    document.getElementById('close-select-playlist').addEventListener('click', () => document.getElementById('select-playlist-modal').classList.remove('active'));
-});
-
-// --- MENU & SEAMLESS FETCHING ---
-document.body.addEventListener('click', async (e) => {
-    if (e.target.closest('#menu-btn')) {
-        document.getElementById('side-menu').classList.add('active');
-        document.getElementById('menu-backdrop').classList.add('active');
-    }
-    if (e.target.closest('#close-menu') || e.target.closest('#menu-backdrop')) {
-        document.getElementById('side-menu').classList.remove('active');
-        document.getElementById('menu-backdrop').classList.remove('active');
-    }
-    
-    const pageBtn = e.target.closest('[data-page]');
-    if (pageBtn) {
-        document.getElementById('side-menu').classList.remove('active');
-        document.getElementById('menu-backdrop').classList.remove('active');
-        const url = pageBtn.getAttribute('data-page');
-        const dynamicView = document.getElementById('dynamic-view');
-        dynamicView.innerHTML = '<div style="text-align:center; padding:40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px; color:var(--accent);"></i></div>';
-        try {
-            const r = await fetch(url);
-            const html = await r.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            dynamicView.innerHTML = doc.querySelector('.mobile-app').innerHTML;
-            const backBtn = dynamicView.querySelector('a[href="index.html"]');
-            if (backBtn) {
-                backBtn.addEventListener('click', (ev) => {
-                    ev.preventDefault();
-                    document.querySelector('.nav-item[data-tab="home"]').click();
-                });
-            }
-        } catch(err) { dynamicView.innerHTML = '<div class="empty-state-text">Failed to load page.</div>'; }
-    }
-});
-
-document.getElementById('export-vault-btn').addEventListener('click', () => {
-    document.getElementById('side-menu').classList.remove('active');
-    document.getElementById('menu-backdrop').classList.remove('active');
-    window.exportVault();
-});
-document.getElementById('import-vault-btn').addEventListener('click', () => {
-    document.getElementById('import-vault-input').click();
-});
-document.getElementById('import-vault-input').addEventListener('change', window.importVault);
-
-// --- DYNAMIC OVERLAYS (LYRICS, BIO, QUEUE, TIMER) ---
-const fpPanel = document.getElementById('fp-overlay-panel');
-const fpContent = document.getElementById('fp-overlay-content');
-const fpTitle = document.getElementById('fp-overlay-title');
-
-document.getElementById('close-fp-overlay').addEventListener('click', () => fpPanel.classList.remove('active'));
-
-document.getElementById('fp-lyrics-btn').addEventListener('click', async () => {
-    if(window.OCTAVE.currentIndex < 0) return;
-    fpTitle.innerText = 'Lyrics';
-    fpContent.innerHTML = '<div style="text-align:center; margin-top: 40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: var(--accent);"></i></div>';
-    fpPanel.classList.add('active');
-    
-    const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-    const lyrics = await window.fetchLyrics(track.author, track.title);
-    fpContent.innerHTML = `<div id="lyrics-content">${lyrics}</div>`;
-});
-
-// Binding the Artist Name to trigger the Bio 
-document.getElementById('fp-artist').addEventListener('click', async () => {
-    if(window.OCTAVE.currentIndex < 0) return;
-    fpTitle.innerText = 'Artist Bio';
-    fpContent.innerHTML = '<div style="text-align:center; margin-top: 40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: var(--accent);"></i></div>';
-    fpPanel.classList.add('active');
-    
-    const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-    const bio = await window.fetchArtistBio(track.author);
-    fpContent.innerHTML = `<div style="color: var(--text-primary); font-size: 15px; line-height: 1.8;">${bio}</div>`;
-});
-
-document.getElementById('fp-queue-btn').addEventListener('click', () => {
-    if(window.OCTAVE.currentIndex < 0) return;
-    fpTitle.innerText = 'Up Next';
-    fpContent.innerHTML = '';
-    fpPanel.classList.add('active');
-    
-    const q = window.OCTAVE.queue;
-    const curr = window.OCTAVE.currentIndex;
-    
-    for(let i = curr; i < q.length; i++) {
-        const track = q[i];
-        const isPlaying = i === curr;
-        const el = document.createElement('div');
-        el.style.cssText = `display: flex; align-items: center; gap: 14px; padding: 12px; background: ${isPlaying ? 'rgba(30,215,96,0.1)' : 'var(--bg-surface)'}; border-radius: 8px; margin-bottom: 12px; border: ${isPlaying ? '1px solid var(--accent)' : '1px solid transparent'};`;
-        el.innerHTML = `
-            <img src="${track.thumb}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover;">
-            <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 14px; font-weight: 600; color: ${isPlaying ? 'var(--accent)' : 'var(--text-primary)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.title}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">${track.author}</div>
-            </div>
-            ${isPlaying ? '<i class="fa-solid fa-volume-high" style="color: var(--accent);"></i>' : ''}
-        `;
-        fpContent.appendChild(el);
-    }
-});
-
-// Routing Sleep Timer out of the 3-dots modal
-document.getElementById('opt-sleep-timer').addEventListener('click', () => {
-    document.getElementById('track-options-modal').classList.remove('active');
-    document.getElementById('timer-modal').classList.add('active');
-});
-document.getElementById('close-timer').addEventListener('click', () => document.getElementById('timer-modal').classList.remove('active'));
-
-const fpOptionsBtn = document.getElementById('fp-options');
-if (fpOptionsBtn) {
-    fpOptionsBtn.addEventListener('click', () => {
-        if (window.OCTAVE && window.OCTAVE.currentIndex >= 0) {
-            openTrackOptions(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
-        }
-    });
-}
-
+// --- GLOBAL RENDER FUNCTIONS ---
 window.renderHome = () => {
     const recentGrid = document.getElementById('home-recent-grid');
     const playlistsDiv = document.getElementById('home-playlists');
@@ -200,7 +22,7 @@ window.renderHome = () => {
             <div class="list-info"><div class="list-title">Liked Songs</div><div class="list-subtitle">${likedCount} tracks saved</div></div>
         </div>
     `;
-    document.getElementById('open-liked-songs').addEventListener('click', window.renderLikedSongs);
+    document.getElementById('open-liked-songs')?.addEventListener('click', window.renderLikedSongs);
     
     Object.keys(window.OCTAVE.playlists).forEach(plName => {
         const pl = window.OCTAVE.playlists[plName];
@@ -212,11 +34,10 @@ window.renderHome = () => {
     });
 };
 
-function renderLibrary() {
+window.renderLibrary = () => {
     const lib = document.getElementById('lib-playlists');
     if(!lib) return;
     lib.innerHTML = Object.keys(window.OCTAVE.playlists).length > 0 ? '' : '<div class="empty-state-text">Create a playlist from the Home tab.</div>';
-    
     Object.keys(window.OCTAVE.playlists).forEach(plName => {
         const pl = window.OCTAVE.playlists[plName];
         const el = document.createElement('div');
@@ -225,7 +46,7 @@ function renderLibrary() {
         el.addEventListener('click', () => window.renderPlaylistDetail(plName));
         lib.appendChild(el);
     });
-}
+};
 
 window.renderPlaylistDetail = (plName) => {
     const pl = window.OCTAVE.playlists[plName];
@@ -293,16 +114,16 @@ window.renderLikedSongs = () => {
     }
 };
 
-function bindSearch() {
+window.bindSearch = () => {
     const input = document.getElementById('searchInput');
     const resContainer = document.getElementById('searchResults');
     const recentList = document.getElementById('search-recent-list');
     if(recentList) {
         if(window.OCTAVE.recentSearches.length === 0) recentList.innerHTML = '<div class="empty-state-text">No recent searches.</div>';
-        else { recentList.innerHTML = ''; window.OCTAVE.recentSearches.forEach(track => recentList.appendChild(buildTrackItem(track))); }
+        else { recentList.innerHTML = ''; window.OCTAVE.recentSearches.forEach(track => recentList.appendChild(window.buildTrackItem(track))); }
     }
     let timer;
-    input.addEventListener('input', (e) => {
+    input?.addEventListener('input', (e) => {
         clearTimeout(timer);
         const query = e.target.value.trim();
         if (!query) {
@@ -325,75 +146,228 @@ function bindSearch() {
                 resContainer.appendChild(empty);
                 return;
             }
-            results.slice(0, 15).forEach(track => resContainer.appendChild(buildTrackItem(track)));
+            results.slice(0, 15).forEach(track => resContainer.appendChild(window.buildTrackItem(track)));
         }, 500);
     });
-}
+};
 
-function buildTrackItem(track) {
+window.buildTrackItem = (track) => {
     const el = document.createElement('div');
     el.style.cssText = 'display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg-surface); border-radius: 8px; margin-bottom: 12px; cursor: pointer;';
     el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${track.title}</div><div style="font-size: 12px; color: var(--text-secondary);">${track.author}</div></div><button class="track-opts-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button>`;
     el.addEventListener('click', (e) => { if(e.target.closest('.track-opts-btn')) return; window.playTrack(track); });
-    el.querySelector('.track-opts-btn').addEventListener('click', (e) => { e.stopPropagation(); openTrackOptions(track); });
+    el.querySelector('.track-opts-btn').addEventListener('click', (e) => { e.stopPropagation(); window.openTrackOptions(track); });
     return el;
-}
+};
 
-function handleBravePrompt() {
-    if (!localStorage.getItem('bravePromptShown')) setTimeout(() => document.getElementById('brave-modal').classList.add('active'), 1500);
-    const dismissBrave = () => { localStorage.setItem('bravePromptShown', 'true'); document.getElementById('brave-modal').classList.remove('active'); };
-    document.getElementById('close-brave').addEventListener('click', dismissBrave);
-    document.getElementById('get-brave').addEventListener('click', dismissBrave);
-}
-
-function bindHomeModals() {
-    const openPl = document.getElementById('open-create-playlist');
-    const plModal = document.getElementById('playlist-modal');
-    if(openPl) openPl.addEventListener('click', () => plModal.classList.add('active'));
-    document.getElementById('close-playlist').addEventListener('click', () => plModal.classList.remove('active'));
-    document.getElementById('save-playlist').addEventListener('click', () => {
-        const name = document.getElementById('playlist-name').value.trim();
-        if(name !== '' && !window.OCTAVE.playlists[name]) {
-            window.OCTAVE.playlists[name] = [];
-            localStorage.setItem('octave_data', JSON.stringify({ ...JSON.parse(localStorage.getItem('octave_data')||'{}'), playlists: window.OCTAVE.playlists }));
-            document.getElementById('playlist-name').value = '';
-            plModal.classList.remove('active');
-            window.renderHome();
-        }
-    });
-}
-
-function openTrackOptions(track) {
+window.openTrackOptions = (track) => {
     window.OCTAVE.activeTrackForOptions = track;
     const modal = document.getElementById('track-options-modal');
     document.getElementById('opt-track-info').innerHTML = `<img src="${track.thumb}" style="width: 40px; height: 40px; border-radius: 6px;"><div style="font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden;">${track.title}</div>`;
     const isLiked = !!window.OCTAVE.liked[track.videoId];
     document.getElementById('opt-like-track').innerHTML = isLiked ? '<i class="fa-solid fa-heart" style="color:var(--accent);"></i> <span>Unlike Track</span>' : '<i class="fa-regular fa-heart"></i> <span>Like Track</span>';
-    modal.classList.add('active');
-}
+    modal?.classList.add('active');
+};
 
-document.getElementById('opt-like-track').addEventListener('click', () => {
-    if(window.OCTAVE.activeTrackForOptions) { window.toggleLike(window.OCTAVE.activeTrackForOptions); document.getElementById('track-options-modal').classList.remove('active'); }
-});
 
-document.getElementById('opt-add-playlist').addEventListener('click', () => {
-    document.getElementById('track-options-modal').classList.remove('active');
-    const plModal = document.getElementById('select-playlist-modal');
-    const list = document.getElementById('playlist-selection-list');
-    if (Object.keys(window.OCTAVE.playlists).length === 0) {
-        list.innerHTML = '<div class="empty-state-text">No playlists created yet. Go to Home to create one.</div>';
-    } else {
-        list.innerHTML = '';
-        Object.keys(window.OCTAVE.playlists).forEach(plName => {
-            const el = document.createElement('div'); el.className = 'drawer-item'; el.innerHTML = `<i class="fa-solid fa-list"></i> <span>${plName}</span>`;
-            el.addEventListener('click', () => {
-                window.OCTAVE.playlists[plName].push(window.OCTAVE.activeTrackForOptions);
-                localStorage.setItem('octave_data', JSON.stringify({ ...JSON.parse(localStorage.getItem('octave_data')||'{}'), playlists: window.OCTAVE.playlists }));
-                plModal.classList.remove('active');
-                if(window.renderPlaylistDetail && document.querySelector('h1').textContent === plName) window.renderPlaylistDetail(plName);
-            });
-            list.appendChild(el);
+// --- SAFETY WRAPPER: INITIALIZE EVERYTHING WHEN DOM IS 100% LOADED ---
+document.addEventListener('DOMContentLoaded', () => {
+    const dynamicView = document.getElementById('dynamic-view');
+    const views = {
+        home: dynamicView?.innerHTML,
+        search: `
+            <header class="search-header" style="padding: 40px 20px 20px 20px; background: var(--bg-deep);">
+                <h1 class="search-title" style="font-size: 24px; font-weight: 700; margin-bottom: 16px;">Search</h1>
+                <div class="search-input-wrap" style="position: relative;">
+                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
+                    <input type="text" id="searchInput" placeholder="Search tracks..." autocomplete="off" style="width: 100%; background: var(--bg-surface); border: 1px solid var(--glass-border); padding: 14px 14px 14px 44px; border-radius: 8px; color: var(--text-primary); font-size: 14px; outline: none;">
+                </div>
+            </header>
+            <div id="searchResults" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+                <div id="search-default-view">
+                    <h3 style="font-size: 16px; margin-bottom: 16px;">Recently Searched</h3>
+                    <div class="vertical-list" id="search-recent-list"></div>
+                </div>
+            </div>
+            <div class="bottom-spacer"></div>
+        `,
+        library: `
+            <header class="search-header" style="padding: 40px 20px 20px 20px;"><h1 class="search-title" style="font-size: 24px; font-weight: 700;">Library</h1></header>
+            <div id="lib-playlists" class="vertical-list" style="padding: 20px;"></div>
+            <div class="bottom-spacer"></div>
+        `,
+        premium: `
+            <div style="padding: 80px 20px; text-align: center;">
+                <i class="fa-solid fa-crown" style="font-size: 64px; color: var(--accent); margin-bottom: 24px;"></i>
+                <h2 style="font-size: 24px; margin-bottom: 12px;">Octave Premium</h2>
+                <p style="color: var(--text-secondary); font-size: 14px;">Ad-free background listening activated.</p>
+            </div>
+        `
+    };
+
+    // Nav Bindings
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelector('.nav-item.active')?.classList.remove('active');
+            item.classList.add('active');
+            const tab = item.getAttribute('data-tab');
+            if (tab === 'home') { dynamicView.innerHTML = views.home; window.renderHome(); } 
+            else { 
+                dynamicView.innerHTML = views[tab]; 
+                if (tab === 'search') window.bindSearch(); 
+                if (tab === 'library') window.renderLibrary(); 
+            }
         });
-    }
-    plModal.classList.add('active');
+    });
+
+    // Global Click Delegation (Sidebar & Fetching)
+    document.body.addEventListener('click', async (e) => {
+        if (e.target.closest('#menu-btn')) {
+            document.getElementById('side-menu')?.classList.add('active');
+            document.getElementById('menu-backdrop')?.classList.add('active');
+        }
+        if (e.target.closest('#close-menu') || e.target.closest('#menu-backdrop')) {
+            document.getElementById('side-menu')?.classList.remove('active');
+            document.getElementById('menu-backdrop')?.classList.remove('active');
+        }
+        
+        const pageBtn = e.target.closest('[data-page]');
+        if (pageBtn) {
+            document.getElementById('side-menu')?.classList.remove('active');
+            document.getElementById('menu-backdrop')?.classList.remove('active');
+            const url = pageBtn.getAttribute('data-page');
+            if(dynamicView) dynamicView.innerHTML = '<div style="text-align:center; padding:40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px; color:var(--accent);"></i></div>';
+            try {
+                const r = await fetch(url);
+                const html = await r.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                if(dynamicView) dynamicView.innerHTML = doc.querySelector('.mobile-app').innerHTML;
+                const backBtn = dynamicView?.querySelector('a[href="index.html"]');
+                if (backBtn) {
+                    backBtn.addEventListener('click', (ev) => {
+                        ev.preventDefault();
+                        document.querySelector('.nav-item[data-tab="home"]')?.click();
+                    });
+                }
+            } catch(err) { if(dynamicView) dynamicView.innerHTML = '<div class="empty-state-text">Failed to load page.</div>'; }
+        }
+    });
+
+    // Vault Bindings
+    document.getElementById('export-vault-btn')?.addEventListener('click', () => {
+        document.getElementById('side-menu')?.classList.remove('active');
+        document.getElementById('menu-backdrop')?.classList.remove('active');
+        window.exportVault();
+    });
+    document.getElementById('import-vault-btn')?.addEventListener('click', () => document.getElementById('import-vault-input')?.click());
+    document.getElementById('import-vault-input')?.addEventListener('change', window.importVault);
+
+    // Full Player UI & Overlay Panels
+    const fpPanel = document.getElementById('fp-overlay-panel');
+    const fpContent = document.getElementById('fp-overlay-content');
+    const fpTitle = document.getElementById('fp-overlay-title');
+
+    document.querySelector('.mini-inner')?.addEventListener('click', () => document.getElementById('full-player')?.classList.add('active'));
+    document.getElementById('close-fp')?.addEventListener('click', () => document.getElementById('full-player')?.classList.remove('active'));
+    document.getElementById('close-fp-overlay')?.addEventListener('click', () => fpPanel?.classList.remove('active'));
+
+    document.getElementById('fp-lyrics-btn')?.addEventListener('click', async () => {
+        if(window.OCTAVE.currentIndex < 0) return;
+        fpTitle.innerText = 'Lyrics';
+        fpContent.innerHTML = '<div style="text-align:center; margin-top: 40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: var(--accent);"></i></div>';
+        fpPanel.classList.add('active');
+        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
+        const lyrics = await window.fetchLyrics(track.author, track.title);
+        fpContent.innerHTML = `<div id="lyrics-content">${lyrics}</div>`;
+    });
+
+    document.getElementById('fp-artist')?.addEventListener('click', async () => {
+        if(window.OCTAVE.currentIndex < 0) return;
+        fpTitle.innerText = 'Artist Bio';
+        fpContent.innerHTML = '<div style="text-align:center; margin-top: 40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: var(--accent);"></i></div>';
+        fpPanel.classList.add('active');
+        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
+        const bio = await window.fetchArtistBio(track.author);
+        fpContent.innerHTML = `<div style="color: var(--text-primary); font-size: 15px; line-height: 1.8;">${bio}</div>`;
+    });
+
+    document.getElementById('fp-queue-btn')?.addEventListener('click', () => {
+        if(window.OCTAVE.currentIndex < 0) return;
+        fpTitle.innerText = 'Up Next';
+        fpContent.innerHTML = '';
+        fpPanel.classList.add('active');
+        const q = window.OCTAVE.queue;
+        const curr = window.OCTAVE.currentIndex;
+        for(let i = curr; i < q.length; i++) {
+            const track = q[i];
+            const isPlaying = i === curr;
+            const el = document.createElement('div');
+            el.style.cssText = `display: flex; align-items: center; gap: 14px; padding: 12px; background: ${isPlaying ? 'rgba(30,215,96,0.1)' : 'var(--bg-surface)'}; border-radius: 8px; margin-bottom: 12px; border: ${isPlaying ? '1px solid var(--accent)' : '1px solid transparent'};`;
+            el.innerHTML = `<img src="${track.thumb}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; color: ${isPlaying ? 'var(--accent)' : 'var(--text-primary)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.title}</div><div style="font-size: 12px; color: var(--text-secondary);">${track.author}</div></div>${isPlaying ? '<i class="fa-solid fa-volume-high" style="color: var(--accent);"></i>' : ''}`;
+            fpContent.appendChild(el);
+        }
+    });
+
+    // Options Modal & Timer
+    document.getElementById('fp-options')?.addEventListener('click', () => {
+        if (window.OCTAVE && window.OCTAVE.currentIndex >= 0) window.openTrackOptions(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
+    });
+    
+    document.getElementById('close-track-options')?.addEventListener('click', () => document.getElementById('track-options-modal')?.classList.remove('active'));
+    document.getElementById('close-select-playlist')?.addEventListener('click', () => document.getElementById('select-playlist-modal')?.classList.remove('active'));
+    
+    document.getElementById('opt-sleep-timer')?.addEventListener('click', () => {
+        document.getElementById('track-options-modal')?.classList.remove('active');
+        document.getElementById('timer-modal')?.classList.add('active');
+    });
+    document.getElementById('close-timer')?.addEventListener('click', () => document.getElementById('timer-modal')?.classList.remove('active'));
+
+    // Playlist Modals
+    document.getElementById('open-create-playlist')?.addEventListener('click', () => document.getElementById('playlist-modal')?.classList.add('active'));
+    document.getElementById('close-playlist')?.addEventListener('click', () => document.getElementById('playlist-modal')?.classList.remove('active'));
+    document.getElementById('save-playlist')?.addEventListener('click', () => {
+        const name = document.getElementById('playlist-name')?.value.trim();
+        if(name && !window.OCTAVE.playlists[name]) {
+            window.OCTAVE.playlists[name] = [];
+            window.saveCache();
+            if(document.getElementById('playlist-name')) document.getElementById('playlist-name').value = '';
+            document.getElementById('playlist-modal')?.classList.remove('active');
+            window.renderHome();
+        }
+    });
+
+    document.getElementById('opt-like-track')?.addEventListener('click', () => {
+        if(window.OCTAVE.activeTrackForOptions) { window.toggleLike(window.OCTAVE.activeTrackForOptions); document.getElementById('track-options-modal')?.classList.remove('active'); }
+    });
+
+    document.getElementById('opt-add-playlist')?.addEventListener('click', () => {
+        document.getElementById('track-options-modal')?.classList.remove('active');
+        const plModal = document.getElementById('select-playlist-modal');
+        const list = document.getElementById('playlist-selection-list');
+        if (Object.keys(window.OCTAVE.playlists).length === 0) {
+            if(list) list.innerHTML = '<div class="empty-state-text">No playlists created yet. Go to Home to create one.</div>';
+        } else {
+            if(list) list.innerHTML = '';
+            Object.keys(window.OCTAVE.playlists).forEach(plName => {
+                const el = document.createElement('div'); el.className = 'drawer-item'; el.innerHTML = `<i class="fa-solid fa-list"></i> <span>${plName}</span>`;
+                el.addEventListener('click', () => {
+                    window.OCTAVE.playlists[plName].push(window.OCTAVE.activeTrackForOptions);
+                    window.saveCache();
+                    plModal?.classList.remove('active');
+                    if(document.querySelector('h1')?.textContent === plName) window.renderPlaylistDetail(plName);
+                });
+                if(list) list.appendChild(el);
+            });
+        }
+        plModal?.classList.add('active');
+    });
+
+    // Boot Up Home
+    if (!localStorage.getItem('bravePromptShown')) setTimeout(() => document.getElementById('brave-modal')?.classList.add('active'), 1500);
+    const dismissBrave = () => { localStorage.setItem('bravePromptShown', 'true'); document.getElementById('brave-modal')?.classList.remove('active'); };
+    document.getElementById('close-brave')?.addEventListener('click', dismissBrave);
+    document.getElementById('get-brave')?.addEventListener('click', dismissBrave);
+
+    window.renderHome();
 });
