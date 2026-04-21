@@ -249,37 +249,74 @@ if (fpOptionsBtn) {
     });
 }
 
+// ─── UPDATED: fetchTrendingMusic with Trending API + Fallback Search ───────────
 window.fetchTrendingMusic = async () => {
     const grid = document.getElementById('home-trending-grid');
     if (!grid) return;
     
+    let loaded = false;
+
+    // ATTEMPT 1: Try official Trending API
     for (let i = 0; i < window.INVIDIOUS.length; i++) {
         const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
         try {
-            // STRICT 10 MINUTE FILTER FOR TRENDING TO PREVENT DJ MIXES AND 2 HOUR COMPILATIONS
-            const r = await fetch(`${base}/api/v1/trending?type=Music&fields=videoId,title,author,videoThumbnails,lengthSeconds`, { signal: AbortSignal.timeout(7000) });
+            const r = await fetch(`${base}/api/v1/trending?type=Music`, { signal: AbortSignal.timeout(5000) });
             if (r.ok) {
                 const d = await r.json();
                 if (d && d.length > 0) {
-                    grid.innerHTML = '';
-                    d.filter(track => track.lengthSeconds && track.lengthSeconds < 600).slice(0, 15).forEach(track => {
-                        const el = document.createElement('div');
-                        el.className = 'square-card';
-                        const thumb = (track.videoThumbnails && track.videoThumbnails.length > 0) ? track.videoThumbnails[0].url : '';
-                        el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
-                        el.addEventListener('click', () => window.playTrack({
-                            videoId: track.videoId, title: track.title, author: track.author, thumb: thumb
-                        }));
-                        grid.appendChild(el);
-                    });
-                    window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length;
-                    return;
+                    const filtered = d.filter(track => track.lengthSeconds && track.lengthSeconds < 600).slice(0, 15);
+                    if (filtered.length > 0) {
+                        grid.innerHTML = '';
+                        filtered.forEach(track => {
+                            const el = document.createElement('div');
+                            el.className = 'square-card';
+                            const thumb = (track.videoThumbnails && track.videoThumbnails.length > 0) ? track.videoThumbnails[0].url : '';
+                            el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
+                            el.addEventListener('click', () => window.playTrack({
+                                videoId: track.videoId, title: track.title, author: track.author, thumb: thumb
+                            }));
+                            grid.appendChild(el);
+                        });
+                        window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length;
+                        loaded = true;
+                        return;
+                    }
                 }
             }
         } catch(e) { continue; }
     }
+
+    // ATTEMPT 2: If Trending is blocked, fallback to Global Top Hits search
+    if (!loaded) {
+        for (let i = 0; i < window.INVIDIOUS.length; i++) {
+            const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
+            try {
+                const r = await fetch(`${base}/api/v1/search?q=Global+Top+50+Music+Hits+Playlist&type=video`, { signal: AbortSignal.timeout(5000) });
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d && d.length > 0) {
+                        grid.innerHTML = '';
+                        d.filter(track => track.lengthSeconds && track.lengthSeconds < 600).slice(0, 15).forEach(track => {
+                            const el = document.createElement('div');
+                            el.className = 'square-card';
+                            const thumb = (track.videoThumbnails && track.videoThumbnails.length > 0) ? track.videoThumbnails[0].url : '';
+                            el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
+                            el.addEventListener('click', () => window.playTrack({
+                                videoId: track.videoId, title: track.title, author: track.author, thumb: thumb
+                            }));
+                            grid.appendChild(el);
+                        });
+                        window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length;
+                        return;
+                    }
+                }
+            } catch(e) { continue; }
+        }
+    }
+
     grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;">Failed to load trending charts.</div>';
 };
+// ─────────────────────────────────────────────────────────────────────────────
 
 window.renderHome = () => {
     const hour = new Date().getHours();
