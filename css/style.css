@@ -987,3 +987,35 @@ body {
     opacity: 0.3;
     transform: scale(0.95);
 }
+/* --- FIXED LYRICS TRANSITIONS --- */
+.lyric-line {
+    font-size: 24px; /* Slightly larger for impact */
+    font-weight: 800;
+    line-height: 1.5;
+    margin-bottom: 24px;
+    color: #ffffff;
+    opacity: 0.5; /* Increased base visibility to prevent blackout */
+    transition: all 0.4s cubic-bezier(0.2, 0, 0.2, 1);
+    transform: scale(1);
+    text-align: center;
+    cursor: pointer;
+    filter: blur(1px); /* Slight blur for non-active lines */
+}
+
+.lyric-line.active {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1.05);
+    text-shadow: 0 0 30px rgba(255,255,255,0.5);
+}
+
+.lyric-line.passed {
+    opacity: 0.25;
+    filter: blur(1px);
+    transform: scale(0.98);
+}
+
+/* Hide scrollbar but keep functionality */
+#fp-overlay-content::-webkit-scrollbar {
+    display: none;
+}
