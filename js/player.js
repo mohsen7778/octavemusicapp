@@ -87,17 +87,7 @@ window.onYouTubeIframeAPIReady = () => {
                     const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
                     updatePlayerUI(track);
                     YTP.cueVideoById({ videoId: track.videoId });
-                    
-                    if ('mediaSession' in navigator) {
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                            title: track.title, artist: track.author,
-                            artwork:[{ src: track.thumb, sizes: '512x512', type: 'image/jpeg' }]
-                        });
-                        navigator.mediaSession.setActionHandler('play', () => YTP.playVideo());
-                        navigator.mediaSession.setActionHandler('pause', () => YTP.pauseVideo());
-                        navigator.mediaSession.setActionHandler('nexttrack', playNextLogic);
-                        navigator.mediaSession.setActionHandler('previoustrack', window.playPrev);
-                    }
+                    updateMediaSession(track);
                 }
             },
             onStateChange: onYTS
@@ -110,6 +100,7 @@ function onYTS(e) {
         window.OCTAVE.isPlaying = true;
         updatePlayIcons('fa-solid fa-pause');
         startProgressTracking();
+        syncMediaSessionPosition(); // Force sync to OS
     } else if (e.data === YT.PlayerState.PAUSED) {
         window.OCTAVE.isPlaying = false;
         updatePlayIcons('fa-solid fa-play');
@@ -160,6 +151,57 @@ function formatTime(seconds) {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
+// --- ADVANCED MEDIA SESSION INTEGRATION ---
+function updateMediaSession(track) {
+    if (!('mediaSession' in navigator)) return;
+    
+    // Provide multiple sizes so Android can pick the highest quality one
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title, 
+        artist: track.author,
+        artwork:[
+            { src: track.thumb, sizes: '96x96', type: 'image/jpeg' },
+            { src: track.thumb, sizes: '128x128', type: 'image/jpeg' },
+            { src: track.thumb, sizes: '192x192', type: 'image/jpeg' },
+            { src: track.thumb, sizes: '256x256', type: 'image/jpeg' },
+            { src: track.thumb, sizes: '384x384', type: 'image/jpeg' },
+            { src: track.thumb, sizes: '512x512', type: 'image/jpeg' }
+        ]
+    });
+
+    // Hard-bind events to ensure Android doesn't strip them
+    navigator.mediaSession.setActionHandler('play', () => { window.togglePlay(); });
+    navigator.mediaSession.setActionHandler('pause', () => { window.togglePlay(); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => { window.playNext(); });
+    navigator.mediaSession.setActionHandler('previoustrack', () => { window.playPrev(); });
+    
+    // Unlocks the interactive drag-scrubber on Android 13+
+    try {
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (YTP && typeof YTP.seekTo === 'function') {
+                YTP.seekTo(details.seekTime, true);
+                syncMediaSessionPosition();
+            }
+        });
+    } catch(e) {}
+}
+
+function syncMediaSessionPosition() {
+    if ('mediaSession' in navigator && YTP && typeof YTP.getDuration === 'function') {
+        try {
+            const duration = YTP.getDuration();
+            const position = YTP.getCurrentTime();
+            if (duration > 0) {
+                navigator.mediaSession.setPositionState({
+                    duration: duration,
+                    playbackRate: 1,
+                    position: position
+                });
+            }
+        } catch(e) {}
+    }
+}
+
 window.playTrackByIndex = (index) => {
     if (index < 0 || index >= window.OCTAVE.queue.length) return;
     window.OCTAVE.currentIndex = index;
@@ -171,17 +213,8 @@ window.playTrackByIndex = (index) => {
     
     updatePlayerUI(track);
     if (ytReady && YTP) YTP.loadVideoById({ videoId: track.videoId });
-
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title, artist: track.author,
-            artwork:[{ src: track.thumb, sizes: '512x512', type: 'image/jpeg' }]
-        });
-        navigator.mediaSession.setActionHandler('play', () => YTP.playVideo());
-        navigator.mediaSession.setActionHandler('pause', () => YTP.pauseVideo());
-        navigator.mediaSession.setActionHandler('nexttrack', playNextLogic);
-        navigator.mediaSession.setActionHandler('previoustrack', window.playPrev);
-    }
+    
+    updateMediaSession(track);
 };
 
 window.playTrack = (track) => {
@@ -240,7 +273,6 @@ async function playNextLogic() {
 }
 window.playNext = playNextLogic;
 
-// --- 5-DAY RECOMMENDATION ENGINE WITH TRENDING FALLBACK ---
 window.fetchDailyRecommendations = async () => {
     if (!window.OCTAVE) return;
     const now = Date.now();
@@ -256,13 +288,11 @@ window.fetchDailyRecommendations = async () => {
         const base = INVIDIOUS[(invIdx + i) % INVIDIOUS.length];
         try {
             let url = '';
-            // If the user has a history, find similar music to their taste.
             if (baseTracks.length > 0) {
                 const seed = baseTracks[Math.floor(Math.random() * baseTracks.length)];
                 url = `${base}/api/v1/videos/${seed.videoId}?fields=recommendedVideos`;
             } else {
-                // If they are a brand new user, fetch Global Trending Music as a fallback!
-                url = `${base}/api/v1/popular?videoCategory=10`; // Category 10 is Music
+                url = `${base}/api/v1/popular?videoCategory=10`; 
             }
 
             const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
@@ -440,6 +470,8 @@ function seekToPosition(e, containerElement) {
         const miniFill = document.getElementById('mini-progress');
         if(fpFill) fpFill.style.width = `${percentage * 100}%`;
         if(miniFill) miniFill.style.width = `${percentage * 100}%`;
+        
+        syncMediaSessionPosition();
     }
 }
 
