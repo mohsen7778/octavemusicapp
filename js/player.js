@@ -162,6 +162,38 @@ function stopSilentKeepAlive() {
     } catch (e) {}
 }
 
+// ─── BACKGROUND PLAY: VISIBILITY OVERRIDE ─────────────────────────────────────
+// YouTube iframe auto-pauses when document.hidden becomes true (tab backgrounded).
+// We counter it by firing playVideo() just after YouTube's own pause triggers.
+// Retries for 5 seconds in case YouTube keeps fighting back.
+let _bgRetryInterval = null;
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        if (window.OCTAVE.isPlaying && YTP) {
+            let retries = 0;
+            clearInterval(_bgRetryInterval);
+            _bgRetryInterval = setInterval(() => {
+                if (!document.hidden || retries >= 10) {
+                    clearInterval(_bgRetryInterval);
+                    return;
+                }
+                try {
+                    const state = YTP.getPlayerState();
+                    // YT.PlayerState.PAUSED === 2
+                    if (state === 2 && window.OCTAVE.isPlaying) {
+                        YTP.playVideo();
+                    }
+                } catch (e) {}
+                retries++;
+            }, 500);
+        }
+    } else {
+        // Tab came back to foreground — stop retrying
+        clearInterval(_bgRetryInterval);
+    }
+});
+
 // Web Audio Context must be resumed after a user gesture (browser policy).
 // We hook into the first real play action to activate it.
 function resumeAudioContext() {
