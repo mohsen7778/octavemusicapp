@@ -417,11 +417,12 @@ window.performSearch = async (query) => {
     for (let i = 0; i < window.INVIDIOUS.length; i++) {
         const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
         try {
-            const r = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,videoThumbnails`, { signal: AbortSignal.timeout(7000) });
+            // STRICT 10-MINUTE FILTER FOR SEARCH
+            const r = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,videoThumbnails,lengthSeconds`, { signal: AbortSignal.timeout(7000) });
             if (!r.ok) continue;
             const d = await r.json(); 
             window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length;
-            return d.map(item => ({
+            return d.filter(item => item.lengthSeconds && item.lengthSeconds < 600).map(item => ({
                 videoId: item.videoId, title: item.title, author: item.author,
                 thumb: (item.videoThumbnails && item.videoThumbnails.length > 0) ? item.videoThumbnails[0].url : ''
             }));
@@ -498,7 +499,6 @@ window.fetchLyrics = async (artist, title) => {
     return { isSynced: false, html: "Lyrics not available in open-source databases." };
 };
 
-// --- NEW FETCH FULL ARTIST PROFILE ENGINE ---
 window.fetchFullArtistProfile = async (artist) => {
     const cleanArtist = artist.replace(/ - Topic/g, '').replace(/VEVO/i, '').trim();
     let profile = { name: cleanArtist, bio: "Artist biography not available in databases.", banner: "", tracks: [] };
@@ -533,11 +533,12 @@ window.fetchFullArtistProfile = async (artist) => {
     for (let i = 0; i < window.INVIDIOUS.length; i++) {
         const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
         try {
-            const r3 = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(cleanArtist)}&type=video&sort_by=view_count&fields=videoId,title,author,videoThumbnails`, { signal: AbortSignal.timeout(7000) });
+            // STRICT 10 MINUTE FILTER FOR ARTIST TRACKS
+            const r3 = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(cleanArtist)}&type=video&sort_by=view_count&fields=videoId,title,author,videoThumbnails,lengthSeconds`, { signal: AbortSignal.timeout(7000) });
             if (r3.ok) {
                 const d = await r3.json();
                 if (d && d.length > 0) {
-                    profile.tracks = d.slice(0, 10).map(item => ({
+                    profile.tracks = d.filter(item => item.lengthSeconds && item.lengthSeconds < 600).slice(0, 10).map(item => ({
                         videoId: item.videoId, title: item.title, author: item.author,
                         thumb: (item.videoThumbnails && item.videoThumbnails.length > 0) ? item.videoThumbnails[0].url : ''
                     }));
