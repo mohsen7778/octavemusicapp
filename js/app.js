@@ -246,6 +246,8 @@ if (fpOptionsBtn) {
     });
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 window.fetchTrendingMusic = async () => {
     const grid = document.getElementById('home-trending-grid');
     if (!grid) return;
@@ -253,8 +255,8 @@ window.fetchTrendingMusic = async () => {
     const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
     const now = Date.now();
 
-    // Check Vault Cache for 3-day rule
-    if (window.OCTAVE.trendingData && window.OCTAVE.trendingData.tracks.length > 0) {
+    // 1. Check Vault Cache for 3-day rule
+    if (window.OCTAVE.trendingData && window.OCTAVE.trendingData.tracks && window.OCTAVE.trendingData.tracks.length > 0) {
         if (now - window.OCTAVE.trendingData.timestamp < THREE_DAYS) {
             grid.innerHTML = '';
             window.OCTAVE.trendingData.tracks.forEach(track => {
@@ -269,35 +271,44 @@ window.fetchTrendingMusic = async () => {
     }
     
     try {
-        const response = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=50/json');
+        // 2. Fetch fresh Top 50 from Apple Music API
+        const response = await fetch('https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/songs.json');
         const data = await response.json();
-        const items = data.feed.entry;
+        const items = data.feed.results;
 
-        grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> Refreshing Global 50...</div>';
+        grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> Syncing Vault...</div>';
 
         const trendingTracks = [];
-        const base = window.INVIDIOUS[window.invIdx % window.INVIDIOUS.length];
-
-        for (const item of items) {
-            const title = item['im:name'].label;
-            const artist = item['im:artist'].label;
+        
+        // 3. Resilient Invidious Mapping Loop
+        // We rotate instances for EVERY track to avoid rate-limit blocking
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const title = item.name;
+            const artist = item.artistName;
+            const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
             
             try {
                 const searchRes = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(artist + ' ' + title)}&type=video&fields=videoId,title,author,videoThumbnails,lengthSeconds`, { signal: AbortSignal.timeout(3000) });
-                const searchData = await searchRes.json();
-                const bestMatch = searchData.find(v => v.lengthSeconds && v.lengthSeconds < 600);
-                
-                if (bestMatch) {
-                    trendingTracks.push({
-                        videoId: bestMatch.videoId,
-                        title: bestMatch.title,
-                        author: bestMatch.author,
-                        thumb: (bestMatch.videoThumbnails && bestMatch.videoThumbnails.length > 0) ? bestMatch.videoThumbnails[0].url : ''
-                    });
+                if (searchRes.ok) {
+                    const searchData = await searchRes.json();
+                    const bestMatch = searchData.find(v => v.lengthSeconds && v.lengthSeconds < 600);
+                    
+                    if (bestMatch) {
+                        trendingTracks.push({
+                            videoId: bestMatch.videoId,
+                            title: bestMatch.title,
+                            author: bestMatch.author,
+                            thumb: (bestMatch.videoThumbnails && bestMatch.videoThumbnails.length > 0) ? bestMatch.videoThumbnails[0].url : ''
+                        });
+                    }
                 }
+                // Tiny pause to breathe
+                await sleep(50);
             } catch (e) { continue; }
         }
 
+        // 4. Save to Vault and Render
         if (trendingTracks.length > 0) {
             window.OCTAVE.trendingData = { timestamp: now, tracks: trendingTracks };
             window.saveCache();
@@ -311,10 +322,10 @@ window.fetchTrendingMusic = async () => {
                 grid.appendChild(el);
             });
         } else {
-            grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;">Charts unavailable.</div>';
+            grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;">Charts currently unavailable.</div>';
         }
     } catch(e) {
-        grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;">Charts unavailable.</div>';
+        grid.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;">Charts currently unavailable.</div>';
     }
 };
 
@@ -467,7 +478,7 @@ window.renderLikedSongs = () => {
             const stats = window.OCTAVE.playStats[track.videoId] || 0;
             const el = document.createElement('div');
             el.style.cssText = 'display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg-surface); border-radius: 8px; margin-bottom: 12px; cursor: pointer;';
-            el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${window.escapeHTML(track.title)}</div><div style="font-size: 12px; color: var(--text-secondary);">${window.escapeHTML(track.author)} • <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 10px;"></i> ${stats} plays</div></div><button class="icon-btn remove-btn" style="color: var(--accent); padding: 10px; z-index: 10;"><i class="fa-solid fa-heart"></i></button>`;
+            el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${window.escapeHTML(track.title)}</div><div style="font-size: 12px; color: var(--text-secondary);">${window.escapeHTML(track.author)} • <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 10px;"></i> ${stats} plays</div></div><button class="icon-btn remove-btn" style="color: #ff4444; padding: 10px; z-index: 10;"><i class="fa-solid fa-heart"></i></button>`;
             
             el.addEventListener('click', (e) => {
                 const removeBtn = e.target.closest('.remove-btn');
