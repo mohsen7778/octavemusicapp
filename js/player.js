@@ -10,7 +10,8 @@ window.OCTAVE = {
     liked: {}, playlists: {}, recentPlayed: [], recentSearches:[],
     playStats: {}, activeTrackForOptions: null,
     dailyRecs: { timestamp: 0, tracks:[] },
-    trendingData: { timestamp: 0, tracks: [] }
+    trendingData: { timestamp: 0, tracks: [] },
+    selectedFont: localStorage.getItem('octave_font') || 'Plus Jakarta Sans'
 };
 
 window.saveCache = () => {
@@ -174,21 +175,12 @@ function startProgressTracking() {
                     window.lastLyricIdx = activeIdx;
                     Array.from(container.children).forEach((child, idx) => {
                         if (idx === activeIdx) {
-                            child.style.color = '#ffffff';
-                            child.style.opacity = '1';
-                            child.style.transform = 'scale(1.15)';
-                            child.style.textShadow = '0 0 15px rgba(255,255,255,0.4)';
+                            child.className = 'lyric-line active';
                             child.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         } else if (idx < activeIdx) {
-                            child.style.color = 'var(--text-secondary)';
-                            child.style.opacity = '0.3';
-                            child.style.transform = 'scale(0.95)';
-                            child.style.textShadow = 'none';
+                            child.className = 'lyric-line passed';
                         } else {
-                            child.style.color = 'var(--text-secondary)';
-                            child.style.opacity = '0.6';
-                            child.style.transform = 'scale(1)';
-                            child.style.textShadow = 'none';
+                            child.className = 'lyric-line';
                         }
                     });
                 }
@@ -480,7 +472,7 @@ window.fetchLyrics = async (artist, title) => {
                 if (data[0].syncedLyrics) {
                     const lines = data[0].syncedLyrics.split('\n');
                     window.activeSyncedLyrics = [];
-                    let html = '<div style="padding: 20px 0 120px 0; display: flex; flex-direction: column; gap: 16px; text-align: center;">';
+                    let html = `<div style="padding: 20px 0 120px 0; font-family: '${window.OCTAVE.selectedFont}', sans-serif;">`;
                     lines.forEach(line => {
                         const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
                         if(match) {
@@ -488,7 +480,7 @@ window.fetchLyrics = async (artist, title) => {
                             const text = match[3].trim();
                             if(text) {
                                 window.activeSyncedLyrics.push({ time, text });
-                                html += `<div style="transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); font-size: 20px; font-weight: 800; cursor: pointer; color: var(--text-secondary); opacity: 0.6;" onclick="YTP.seekTo(${time}, true)">${window.escapeHTML(text)}</div>`;
+                                html += `<div class="lyric-line" onclick="YTP.seekTo(${time}, true)">${window.escapeHTML(text)}</div>`;
                             }
                         }
                     });
@@ -497,7 +489,7 @@ window.fetchLyrics = async (artist, title) => {
                     return { isSynced: true, html };
                 } else if (data[0].plainLyrics) {
                     window.activeSyncedLyrics = null;
-                    return { isSynced: false, html: window.escapeHTML(data[0].plainLyrics) };
+                    return { isSynced: false, html: `<div style="padding: 20px 0; white-space: pre-wrap; font-family: '${window.OCTAVE.selectedFont}', sans-serif; font-size: 18px; line-height: 2; opacity: 1;">${window.escapeHTML(data[0].plainLyrics)}</div>` };
                 }
             }
         }
