@@ -23,7 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <div id="searchResults" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
                 <div id="search-default-view">
                     <h3 style="font-size: 16px; margin-bottom: 16px;">Recently Searched</h3>
-                    <div class="vertical-list" id="search-recent-list"></div>
+                    <!-- Fixed Alignment Bug: padding-right: 0 prevents it from shifting left -->
+                    <div class="vertical-list" id="search-recent-list" style="padding-right: 0;"></div>
                 </div>
             </div>
             <div class="bottom-spacer"></div>
@@ -212,6 +213,26 @@ window.renderHome = () => {
         });
     }
 
+    // RECOMMENDED GRID LOGIC
+    const recsGrid = document.getElementById('home-recs-grid');
+    const recsSection = document.getElementById('recommended-section');
+    if (recsGrid && recsSection) {
+        if (window.OCTAVE.dailyRecs && window.OCTAVE.dailyRecs.tracks.length > 0) {
+            recsSection.style.display = 'block';
+            recsGrid.innerHTML = '';
+            window.OCTAVE.dailyRecs.tracks.forEach(track => {
+                const el = document.createElement('div');
+                el.className = 'square-card';
+                el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${track.title}</div>`;
+                el.addEventListener('click', () => window.playTrack(track));
+                recsGrid.appendChild(el);
+            });
+        } else {
+            recsSection.style.display = 'none';
+        }
+    }
+    if (window.fetchDailyRecommendations) window.fetchDailyRecommendations();
+
     const likedCount = Object.keys(window.OCTAVE.liked).length;
     playlistsDiv.innerHTML = `
         <div class="list-item" id="open-discover-mix" style="margin-bottom: 8px;">
@@ -257,9 +278,16 @@ window.renderPlaylistDetail = (plName) => {
     const dynamicView = document.getElementById('dynamic-view');
     let totalPlays = pl.reduce((sum, track) => sum + (window.OCTAVE.playStats[track.videoId] || 0), 0);
 
+    // FIXED: Added Playlist Delete button
     dynamicView.innerHTML = `
         <div style="padding: 40px 20px 30px; background: linear-gradient(180deg, rgba(30,215,96,0.1) 0%, var(--bg-deep) 100%);">
-            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;"><button class="icon-btn" onclick="document.querySelector('.nav-item.active').click()"><i class="fa-solid fa-arrow-left"></i></button><h1 style="font-size: 28px; font-weight: 800;">${plName}</h1></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button class="icon-btn" onclick="document.querySelector('.nav-item.active').click()"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h1 style="font-size: 28px; font-weight: 800;">${plName}</h1>
+                </div>
+                <button class="icon-btn" onclick="window.deletePlaylist('${plName}')" style="color: #ff4444; font-size: 20px;"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
             <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 24px;">${pl.length} tracks • ${totalPlays} lifetime plays</div>
             <div style="display: flex; gap: 12px;">
                 <button class="btn-primary" onclick="window.playPlaylist('${plName}')" style="flex: 1; padding: 14px; border-radius: 100px; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fa-solid fa-play"></i> Play All</button>
@@ -276,9 +304,16 @@ window.renderPlaylistDetail = (plName) => {
             const stats = window.OCTAVE.playStats[track.videoId] || 0;
             const el = document.createElement('div');
             el.style.cssText = 'display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg-surface); border-radius: 8px; margin-bottom: 12px; cursor: pointer;';
-            el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${track.title}</div><div style="font-size: 12px; color: var(--text-secondary);">${track.author} • <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 10px;"></i> ${stats} plays</div></div><button class="icon-btn remove-btn" style="color: #ff4444;"><i class="fa-solid fa-trash-can"></i></button>`;
+            el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${track.title}</div><div style="font-size: 12px; color: var(--text-secondary);">${track.author} • <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 10px;"></i> ${stats} plays</div></div><button class="icon-btn remove-btn" style="color: #ff4444; padding: 10px; z-index: 10;"><i class="fa-solid fa-xmark"></i></button>`;
+            
+            // FIXED: Added stopPropagation so trash button doesn't trigger song play
             el.addEventListener('click', (e) => {
-                if(e.target.closest('.remove-btn')) { window.removeFromPlaylist(plName, index); return; }
+                const removeBtn = e.target.closest('.remove-btn');
+                if (removeBtn) { 
+                    e.stopPropagation();
+                    window.removeFromPlaylist(plName, index); 
+                    return; 
+                }
                 window.OCTAVE.queue = [...pl]; window.playTrackByIndex(index);
             });
             listContainer.appendChild(el);
@@ -307,9 +342,15 @@ window.renderLikedSongs = () => {
             const stats = window.OCTAVE.playStats[track.videoId] || 0;
             const el = document.createElement('div');
             el.style.cssText = 'display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg-surface); border-radius: 8px; margin-bottom: 12px; cursor: pointer;';
-            el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${track.title}</div><div style="font-size: 12px; color: var(--text-secondary);">${track.author} • <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 10px;"></i> ${stats} plays</div></div><button class="icon-btn remove-btn" style="color: var(--accent);"><i class="fa-solid fa-heart"></i></button>`;
+            el.innerHTML = `<img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;"><div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${track.title}</div><div style="font-size: 12px; color: var(--text-secondary);">${track.author} • <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 10px;"></i> ${stats} plays</div></div><button class="icon-btn remove-btn" style="color: var(--accent); padding: 10px; z-index: 10;"><i class="fa-solid fa-heart"></i></button>`;
+            
             el.addEventListener('click', (e) => {
-                if(e.target.closest('.remove-btn')) { window.removeFromLiked(track.videoId); return; }
+                const removeBtn = e.target.closest('.remove-btn');
+                if (removeBtn) { 
+                    e.stopPropagation();
+                    window.removeFromLiked(track.videoId); 
+                    return; 
+                }
                 window.OCTAVE.queue = [...pl]; window.playTrackByIndex(index);
             });
             listContainer.appendChild(el);
