@@ -141,15 +141,70 @@ document.getElementById('fp-lyrics-btn').addEventListener('click', async () => {
     }
 });
 
-document.getElementById('fp-artist').addEventListener('click', async () => {
-    if(window.OCTAVE.currentIndex < 0) return;
-    fpTitle.innerText = 'Artist Bio';
-    fpContent.innerHTML = '<div style="text-align:center; margin-top: 40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: var(--accent);"></i></div>';
-    fpPanel.classList.add('active');
+// --- RENDER FULL ARTIST PAGE LOGIC ---
+window.renderArtistPage = async (artistName) => {
+    document.getElementById('full-player').classList.remove('active');
+    document.getElementById('fp-overlay-panel').classList.remove('active');
     
+    const dynamicView = document.getElementById('dynamic-view');
+    dynamicView.innerHTML = '<div style="padding: 100px 20px; text-align:center;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 40px; color: var(--accent);"></i><div style="margin-top: 16px; color: var(--text-secondary);">Loading Artist Profile...</div></div>';
+    
+    const profile = await window.fetchFullArtistProfile(artistName);
+    
+    let tracksHTML = '';
+    if (profile.tracks.length > 0) {
+        profile.tracks.forEach((track, index) => {
+            tracksHTML += `
+                <div class="artist-track-item" style="display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg-surface); border-radius: 8px; margin-bottom: 12px; cursor: pointer;">
+                    <img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${window.escapeHTML(track.title)}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">${window.escapeHTML(track.author)}</div>
+                    </div>
+                    <button class="icon-btn" style="color: var(--accent);"><i class="fa-solid fa-play"></i></button>
+                </div>
+            `;
+        });
+    } else {
+        tracksHTML = '<div class="empty-state-text">No tracks found.</div>';
+    }
+
+    const bannerStyle = profile.banner ? `background-image: url('${profile.banner}'); background-size: cover; background-position: center;` : `background: linear-gradient(135deg, var(--bg-deep), var(--glass-bg));`;
+
+    dynamicView.innerHTML = `
+        <div style="position: relative; width: 100%; height: 250px; ${bannerStyle}">
+            <div style="position: absolute; inset: 0; background: linear-gradient(0deg, var(--bg-deep) 0%, transparent 100%);"></div>
+            <button class="icon-btn" onclick="document.querySelector('.nav-item.active').click()" style="position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.5); border-radius: 50%; padding: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;"><i class="fa-solid fa-arrow-left"></i></button>
+            <div style="position: absolute; bottom: 20px; left: 20px;">
+                <h1 style="font-size: 32px; font-weight: 800; text-shadow: 0 4px 10px rgba(0,0,0,0.8); margin:0;">${window.escapeHTML(profile.name)}</h1>
+            </div>
+        </div>
+        <div style="padding: 20px;">
+            <div style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 16px; border-radius: 12px;">${window.escapeHTML(profile.bio)}</div>
+            <h2 class="section-title" style="margin-bottom: 16px;">Top Tracks</h2>
+            <div class="vertical-list" id="artist-tracks-list">
+                ${tracksHTML}
+            </div>
+        </div>
+        <div class="bottom-spacer"></div>
+    `;
+
+    if (profile.tracks.length > 0) {
+        const trackNodes = document.querySelectorAll('.artist-track-item');
+        trackNodes.forEach((node, idx) => {
+            node.addEventListener('click', () => {
+                window.OCTAVE.queue = [...profile.tracks];
+                window.playTrackByIndex(idx);
+            });
+        });
+    }
+};
+
+// Hooked into the full player's artist name click
+document.getElementById('fp-artist').addEventListener('click', () => {
+    if(window.OCTAVE.currentIndex < 0) return;
     const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-    const bio = await window.fetchArtistBio(track.author);
-    fpContent.innerHTML = `<div style="color: var(--text-primary); font-size: 15px; line-height: 1.8;">${window.escapeHTML(bio)}</div>`;
+    window.renderArtistPage(track.author);
 });
 
 document.getElementById('fp-queue-btn').addEventListener('click', () => {
@@ -461,7 +516,6 @@ document.getElementById('opt-add-playlist').addEventListener('click', () => {
     plModal.classList.add('active');
 });
 
-// --- YOUTUBE PLAYLIST IMPORT LOGIC ---
 document.getElementById('close-yt-import')?.addEventListener('click', () => {
     document.getElementById('yt-import-modal').classList.remove('active');
     document.getElementById('yt-playlist-url').value = '';
@@ -471,7 +525,6 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
     const urlInput = document.getElementById('yt-playlist-url').value.trim();
     if (!urlInput) return;
 
-    // Parse the actual Playlist ID out of the full YouTube URL
     let playlistId = '';
     try {
         const urlObj = new URL(urlInput);
@@ -503,7 +556,6 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
                 if (data.videos && data.videos.length > 0) {
                     const newPlaylistName = data.title || "Imported Playlist";
                     
-                    // Prevent overwriting if you import the same playlist twice
                     let finalName = newPlaylistName;
                     let count = 1;
                     while(window.OCTAVE.playlists[finalName]) {
@@ -511,7 +563,6 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
                         count++;
                     }
 
-                    // Map the ripped data straight into the offline vault format
                     window.OCTAVE.playlists[finalName] = data.videos.map(v => ({
                         videoId: v.videoId,
                         title: v.title,
@@ -526,7 +577,6 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
                     modal.classList.remove('active');
                     document.getElementById('yt-playlist-url').value = '';
                     
-                    // Refresh the Library view so it shows up instantly
                     const activeNav = document.querySelector('.nav-item.active');
                     if(activeNav && activeNav.getAttribute('data-tab') === 'library') {
                         document.querySelector('.nav-item[data-tab="library"]').click(); 
