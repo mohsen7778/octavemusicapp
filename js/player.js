@@ -13,18 +13,31 @@ window.OCTAVE = {
     playlists: {},
     recentPlayed: [],
     recentSearches: [],
-    playStats: {},
+    playStats: {}, // Upgraded to hold complex objects
     activeTrackForOptions: null,
-    dailyRecs: {
-        timestamp: 0,
-        tracks: []
-    },
-    trendingData: {
-        timestamp: 0,
-        tracks: []
-    },
+    dailyRecs: { timestamp: 0, tracks: [] },
+    trendingData: { timestamp: 0, tracks: [] },
     artistCache: {},
-    selectedFont: localStorage.getItem('octave_font') || 'Plus Jakarta Sans'
+    selectedFont: localStorage.getItem('octave_font') || 'Plus Jakarta Sans',
+    
+    // NEW: Ephemeral Tracking States
+    sessionHistory: [], // The No-Repeat Blacklist
+    trackStartTime: 0,
+    isNextTrackManual: true, // Defaults to true, algorithm changes it when auto-dj plays
+    activeTrackViewed: false
+};
+
+window.initTrackStats = (videoId) => {
+    if (!window.OCTAVE.playStats[videoId]) {
+        window.OCTAVE.playStats[videoId] = {
+            plays: 0,
+            skips: 0,
+            completes: 0,
+            manual: 0,
+            activeViews: 0,
+            lastPlayedTimeOfDay: ''
+        };
+    }
 };
 
 window.saveCache = () => {
@@ -33,7 +46,7 @@ window.saveCache = () => {
         playlists: window.OCTAVE.playlists,
         recentPlayed: window.OCTAVE.recentPlayed.slice(0, 30),
         recentSearches: window.OCTAVE.recentSearches.slice(0, 30),
-        playStats: window.OCTAVE.playStats,
+        playStats: window.OCTAVE.playStats, // Saves the new complex object
         queue: window.OCTAVE.queue,
         currentIndex: window.OCTAVE.currentIndex,
         dailyRecs: window.OCTAVE.dailyRecs,
@@ -50,17 +63,19 @@ function loadCache() {
         window.OCTAVE.playlists = parsed.playlists || {};
         window.OCTAVE.recentPlayed = parsed.recentPlayed || [];
         window.OCTAVE.recentSearches = parsed.recentSearches || [];
+        
+        // Upgrade legacy playStats numbers to objects seamlessly
         window.OCTAVE.playStats = parsed.playStats || {};
+        Object.keys(window.OCTAVE.playStats).forEach(key => {
+            if (typeof window.OCTAVE.playStats[key] === 'number') {
+                window.OCTAVE.playStats[key] = { plays: window.OCTAVE.playStats[key], skips: 0, completes: 0, manual: 0, activeViews: 0, lastPlayedTimeOfDay: '' };
+            }
+        });
+
         window.OCTAVE.queue = parsed.queue || [];
         window.OCTAVE.currentIndex = parsed.currentIndex || -1;
-        window.OCTAVE.dailyRecs = parsed.dailyRecs || {
-            timestamp: 0,
-            tracks: []
-        };
-        window.OCTAVE.trendingData = parsed.trendingData || {
-            timestamp: 0,
-            tracks: []
-        };
+        window.OCTAVE.dailyRecs = parsed.dailyRecs || { timestamp: 0, tracks: [] };
+        window.OCTAVE.trendingData = parsed.trendingData || { timestamp: 0, tracks: [] };
         window.OCTAVE.artistCache = parsed.artistCache || {};
     }
 }
@@ -68,9 +83,7 @@ loadCache();
 
 window.exportVault = () => {
     const data = localStorage.getItem('octave_data') || "{}";
-    const blob = new Blob([data], {
-        type: "application/json"
-    });
+    const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -136,22 +149,15 @@ window.onYouTubeIframeAPIReady = () => {
     YTP = new YT.Player('yt-hidden-frame', {
         height: '1',
         width: '1',
-        playerVars: {
-            autoplay: 0,
-            controls: 0,
-            playsinline: 1
-        },
+        playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
         events: {
             onReady: e => {
                 ytReady = true;
                 e.target.setVolume(100);
-
                 if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.queue.length > 0) {
                     const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
                     updatePlayerUI(track);
-                    YTP.cueVideoById({
-                        videoId: track.videoId
-                    });
+                    YTP.cueVideoById({ videoId: track.videoId });
                     updateMediaSession(track);
                 }
             },
@@ -172,6 +178,15 @@ function onYTS(e) {
         clearInterval(progressTimer);
     } else if (e.data === YT.PlayerState.ENDED) {
         window.OCTAVE.isPlaying = false;
+        
+        // ALGORITHM: Track completion (+2 points)
+        if (window.OCTAVE.currentIndex >= 0) {
+            const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
+            window.initTrackStats(track.videoId);
+            window.OCTAVE.playStats[track.videoId].completes++;
+            window.saveCache();
+        }
+
         if (window.playNextLogic) window.playNextLogic();
     }
 }
@@ -234,7 +249,7 @@ function updateMediaSession(track) {
 
     navigator.mediaSession.setActionHandler('play', () => { window.togglePlay(); });
     navigator.mediaSession.setActionHandler('pause', () => { window.togglePlay(); });
-    navigator.mediaSession.setActionHandler('nexttrack', () => { if (window.playNextLogic) window.playNextLogic(); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => { document.getElementById('fp-next')?.click(); });
     navigator.mediaSession.setActionHandler('previoustrack', () => { window.playPrev(); });
 
     try {
@@ -265,22 +280,43 @@ function syncMediaSessionPosition() {
 
 window.playTrackByIndex = (index) => {
     if (index < 0 || index >= window.OCTAVE.queue.length) return;
-    window.OCTAVE.currentIndex = index;
+    
     const track = window.OCTAVE.queue[index];
+    
+    // ALGORITHM: Time of Day Tagging
+    const hour = new Date().getHours();
+    let tod = 'night';
+    if (hour >= 5 && hour < 12) tod = 'morning';
+    else if (hour >= 12 && hour < 17) tod = 'afternoon';
 
-    window.OCTAVE.playStats[track.videoId] = (window.OCTAVE.playStats[track.videoId] || 0) + 1;
+    window.initTrackStats(track.videoId);
+    window.OCTAVE.playStats[track.videoId].plays++;
+    window.OCTAVE.playStats[track.videoId].lastPlayedTimeOfDay = tod;
+    
+    if (window.OCTAVE.isNextTrackManual) {
+        window.OCTAVE.playStats[track.videoId].manual++;
+    }
+
+    // Reset tracking flags for the new track
+    window.OCTAVE.trackStartTime = Date.now();
+    window.OCTAVE.activeTrackViewed = false;
+    window.OCTAVE.currentIndex = index;
+
+    // Add to Session Blacklist (No Repeats)
+    if (!window.OCTAVE.sessionHistory.includes(track.videoId)) {
+        window.OCTAVE.sessionHistory.push(track.videoId);
+    }
+    
     window.OCTAVE.recentPlayed = [track, ...window.OCTAVE.recentPlayed.filter(t => t.videoId !== track.videoId)];
     window.saveCache();
 
     updatePlayerUI(track);
-    if (ytReady && YTP) YTP.loadVideoById({
-        videoId: track.videoId
-    });
-
+    if (ytReady && YTP) YTP.loadVideoById({ videoId: track.videoId });
     updateMediaSession(track);
 };
 
 window.playTrack = (track) => {
+    window.OCTAVE.isNextTrackManual = true; // Mark intent
     window.OCTAVE.recentSearches = [track, ...window.OCTAVE.recentSearches.filter(t => t.videoId !== track.videoId)];
     const existIdx = window.OCTAVE.queue.findIndex(t => t.videoId === track.videoId);
     if (existIdx >= 0) {
@@ -295,6 +331,7 @@ window.playPrev = () => {
     if (YTP && YTP.getCurrentTime() > 3) {
         YTP.seekTo(0);
     } else if (window.OCTAVE.currentIndex > 0) {
+        window.OCTAVE.isNextTrackManual = true;
         window.playTrackByIndex(window.OCTAVE.currentIndex - 1);
     }
 };
@@ -302,6 +339,7 @@ window.playPrev = () => {
 window.playPlaylist = (plName) => {
     const pl = window.OCTAVE.playlists[plName];
     if (pl && pl.length > 0) {
+        window.OCTAVE.isNextTrackManual = true;
         window.OCTAVE.queue = [...pl];
         window.playTrackByIndex(0);
     }
@@ -538,17 +576,13 @@ window.fetchLyrics = async (artist, title) => {
     return `<div style="text-align:center; padding: 40px; color: var(--text-secondary);">Lyrics not found for this track.</div>`;
 };
 
-// BULLETPROOF ARTIST PROFILE FETCH
 window.fetchFullArtistProfile = async (artist) => {
-    
-    // BUG FIX 1: Aggressively strip collab names to find the core artist
     const cleanArtist = artist
         .replace(/ - Topic/gi, '')
         .replace(/VEVO/gi, '')
         .split(/,|&| ft\.| feat\.| x | with /i)[0]
         .trim();
     
-    // BUG FIX 2: Cache Bypass (Nuke the corrupted cache if it failed previously)
     if (window.OCTAVE.artistCache && window.OCTAVE.artistCache[cleanArtist]) {
         if (window.OCTAVE.artistCache[cleanArtist].bio !== "Artist biography not available.") {
             return window.OCTAVE.artistCache[cleanArtist];
@@ -564,7 +598,6 @@ window.fetchFullArtistProfile = async (artist) => {
         tracks: []
     };
 
-    // Try AudioDB first for the Banner Image
     try {
         const r1 = await fetch(`https://www.theaudiodb.com/api/v1/json/2/search.php?s=${encodeURIComponent(cleanArtist)}`);
         if (r1.ok) {
@@ -578,10 +611,8 @@ window.fetchFullArtistProfile = async (artist) => {
         }
     } catch (e) {}
     
-    // BUG FIX 3: Ultimate Wikipedia API with Auto-Redirects
     if (profile.bio === "Artist biography not available.") {
         try {
-            // Method A: Direct Wikipedia Summary (Fastest)
             const w1 = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanArtist)}`);
             if (w1.ok) {
                 const d1 = await w1.json();
@@ -590,7 +621,6 @@ window.fetchFullArtistProfile = async (artist) => {
                 }
             }
             
-            // Method B: Wikipedia Search Query (Handles redirects, caps, and fuzziness)
             if (profile.bio === "Artist biography not available.") {
                 const w2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=1&explaintext=1&redirects=1&titles=${encodeURIComponent(cleanArtist)}&origin=*`);
                 if (w2.ok) {
@@ -605,7 +635,6 @@ window.fetchFullArtistProfile = async (artist) => {
         } catch (e) {}
     }
 
-    // Fetch Top Tracks
     for (let i = 0; i < window.INVIDIOUS.length; i++) {
         const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
         const controller = new AbortController();
@@ -633,7 +662,6 @@ window.fetchFullArtistProfile = async (artist) => {
         }
     }
     
-    // Save to Cache
     if (!window.OCTAVE.artistCache) window.OCTAVE.artistCache = {};
     window.OCTAVE.artistCache[cleanArtist] = profile;
     window.saveCache();
@@ -642,28 +670,55 @@ window.fetchFullArtistProfile = async (artist) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelector('.play-btn-mini')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.togglePlay();
-    });
-    document.getElementById('fp-play')?.addEventListener('click', window.togglePlay);
-    document.getElementById('fp-next')?.addEventListener('click', () => {
-        if (window.playNextLogic) window.playNextLogic();
-    });
-    document.getElementById('fp-prev')?.addEventListener('click', window.playPrev);
-    document.getElementById('mini-like-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
-    });
-    document.getElementById('fp-like')?.addEventListener('click', () => {
-        if (window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
-    });
-    document.getElementById('fp-progress-container')?.addEventListener('click', (e) => seekToPosition(e, document.getElementById('fp-progress-container')));
+    // ACTIVE LISTENING TAGGING (Clicking full player)
     document.querySelector('.mini-player')?.addEventListener('click', (e) => {
         const rect = document.querySelector('.mini-player').getBoundingClientRect();
         if (e.clientY - rect.top <= 10) {
             e.stopPropagation();
             seekToPosition(e, document.querySelector('.mini-player'));
+        } else {
+            if(window.OCTAVE.currentIndex >= 0 && !window.OCTAVE.activeTrackViewed) {
+                const id = window.OCTAVE.queue[window.OCTAVE.currentIndex].videoId;
+                window.initTrackStats(id);
+                window.OCTAVE.playStats[id].activeViews++;
+                window.OCTAVE.activeTrackViewed = true;
+                window.saveCache();
+            }
         }
     });
+
+    document.querySelector('.play-btn-mini')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.togglePlay();
+    });
+    
+    document.getElementById('fp-play')?.addEventListener('click', window.togglePlay);
+    
+    // THE SKIP PENALTY (Next button logic)
+    document.getElementById('fp-next')?.addEventListener('click', () => {
+        if (window.OCTAVE.currentIndex >= 0) {
+            const timeListened = Date.now() - window.OCTAVE.trackStartTime;
+            if (timeListened < 15000) { // If skipped before 15 seconds
+                const id = window.OCTAVE.queue[window.OCTAVE.currentIndex].videoId;
+                window.initTrackStats(id);
+                window.OCTAVE.playStats[id].skips++;
+                window.saveCache();
+            }
+        }
+        window.OCTAVE.isNextTrackManual = true;
+        if (window.playNextLogic) window.playNextLogic();
+    });
+    
+    document.getElementById('fp-prev')?.addEventListener('click', window.playPrev);
+    
+    document.getElementById('mini-like-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
+    });
+    
+    document.getElementById('fp-like')?.addEventListener('click', () => {
+        if (window.OCTAVE.currentIndex >= 0) window.toggleLike(window.OCTAVE.queue[window.OCTAVE.currentIndex]);
+    });
+    
+    document.getElementById('fp-progress-container')?.addEventListener('click', (e) => seekToPosition(e, document.getElementById('fp-progress-container')));
 });
