@@ -145,6 +145,7 @@ window.togglePlay = () => {
     window.OCTAVE.isPlaying ? YTP.pauseVideo() : YTP.playVideo();
 };
 
+// OVERHAULED SYNC ENGINE (Smooth manual scroll + Zero blackout)
 function startProgressTracking() {
     clearInterval(progressTimer);
     progressTimer = setInterval(() => {
@@ -163,7 +164,10 @@ function startProgressTracking() {
                 if(totTime) totTime.textContent = formatTime(total);
             }
 
-            if (window.activeSyncedLyrics && document.getElementById('lyrics-content')) {
+            const lyricsView = document.getElementById('fp-overlay-panel');
+            const isLyricsActive = lyricsView && lyricsView.classList.contains('active');
+
+            if (window.activeSyncedLyrics && isLyricsActive && document.getElementById('lyrics-content')) {
                 const container = document.getElementById('lyrics-content');
                 let activeIdx = -1;
                 for (let i = 0; i < window.activeSyncedLyrics.length; i++) {
@@ -173,10 +177,14 @@ function startProgressTracking() {
                 
                 if (activeIdx !== -1 && activeIdx !== window.lastLyricIdx) {
                     window.lastLyricIdx = activeIdx;
-                    Array.from(container.children).forEach((child, idx) => {
+                    const children = Array.from(container.children);
+                    children.forEach((child, idx) => {
                         if (idx === activeIdx) {
                             child.className = 'lyric-line active';
-                            child.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Smoother scroll: only scroll if the user isn't currently touching the screen
+                            if (!window.isUserScrollingLyrics) {
+                                child.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
                         } else if (idx < activeIdx) {
                             child.className = 'lyric-line passed';
                         } else {
@@ -448,10 +456,9 @@ window.setSleepTimer = (minutes) => {
 window.activeSyncedLyrics = null;
 window.lastLyricIdx = -1;
 
+// ACCURACY OVERHAUL: Specific cleaning and duration check
 window.fetchLyrics = async (artist, title) => {
-    let rawTitle = title.includes(' - ') ? title.split(' - ').slice(1).join(' - ') : title;
-    
-    const cleanTitle = rawTitle
+    const cleanTitle = title
         .replace(/[\(\[【].*?[\)\]】]/g, '') 
         .replace(/(feat\.|ft\.|remix|official|video|music video|lyric|audio|live).*/gi, '') 
         .replace(/["']/g, '') 
@@ -469,10 +476,16 @@ window.fetchLyrics = async (artist, title) => {
         if (r1.ok) {
             const data = await r1.json();
             if (data && data.length > 0) {
-                if (data[0].syncedLyrics) {
-                    const lines = data[0].syncedLyrics.split('\n');
+                // Find best match based on Track Name similarity to prevent wrong song
+                const bestMatch = data.find(item => 
+                    item.trackName.toLowerCase().includes(cleanTitle.toLowerCase()) ||
+                    cleanTitle.toLowerCase().includes(item.trackName.toLowerCase())
+                ) || data[0];
+
+                if (bestMatch.syncedLyrics) {
+                    const lines = bestMatch.syncedLyrics.split('\n');
                     window.activeSyncedLyrics = [];
-                    let html = `<div style="padding: 20px 0 120px 0; font-family: '${window.OCTAVE.selectedFont}', sans-serif;">`;
+                    let html = `<div style="padding: 20px 0 160px 0; font-family: '${window.OCTAVE.selectedFont}', sans-serif;">`;
                     lines.forEach(line => {
                         const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
                         if(match) {
@@ -487,9 +500,9 @@ window.fetchLyrics = async (artist, title) => {
                     html += '</div>';
                     window.lastLyricIdx = -1;
                     return { isSynced: true, html };
-                } else if (data[0].plainLyrics) {
+                } else if (bestMatch.plainLyrics) {
                     window.activeSyncedLyrics = null;
-                    return { isSynced: false, html: `<div style="padding: 20px 0; white-space: pre-wrap; font-family: '${window.OCTAVE.selectedFont}', sans-serif; font-size: 18px; line-height: 2; opacity: 1;">${window.escapeHTML(data[0].plainLyrics)}</div>` };
+                    return { isSynced: false, html: `<div style="padding: 20px 0; white-space: pre-wrap; font-family: '${window.OCTAVE.selectedFont}', sans-serif; font-size: 20px; font-weight: 700; line-height: 2; color: #ffffff; opacity: 1;">${window.escapeHTML(bestMatch.plainLyrics)}</div>` };
                 }
             }
         }
