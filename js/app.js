@@ -1,13 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- SPLASH SCREEN LOGIC ---
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         if (splash) {
             splash.style.opacity = '0';
             splash.style.visibility = 'hidden';
-            setTimeout(() => splash.remove(), 600); // Remove from DOM after fade finishes
+            setTimeout(() => splash.remove(), 600);
         }
-    }, 2000); // Splash screen duration (2 seconds)
+    }, 2000);
 
     const dynamicView = document.getElementById('dynamic-view');
     const views = {
@@ -70,7 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('close-select-playlist').addEventListener('click', () => document.getElementById('select-playlist-modal').classList.remove('active'));
 });
 
-// --- MENU & SEAMLESS FETCHING ---
 document.body.addEventListener('click', async (e) => {
     if (e.target.closest('#menu-btn')) {
         document.getElementById('side-menu').classList.add('active');
@@ -115,13 +113,13 @@ document.getElementById('import-vault-btn').addEventListener('click', () => {
 });
 document.getElementById('import-vault-input').addEventListener('change', window.importVault);
 
-// --- DYNAMIC OVERLAYS (LYRICS, BIO, QUEUE, TIMER) ---
 const fpPanel = document.getElementById('fp-overlay-panel');
 const fpContent = document.getElementById('fp-overlay-content');
 const fpTitle = document.getElementById('fp-overlay-title');
 
 document.getElementById('close-fp-overlay').addEventListener('click', () => fpPanel.classList.remove('active'));
 
+// --- THIS FIXES THE [object Object] LYRICS BUG ---
 document.getElementById('fp-lyrics-btn').addEventListener('click', async () => {
     if(window.OCTAVE.currentIndex < 0) return;
     fpTitle.innerText = 'Lyrics';
@@ -129,11 +127,15 @@ document.getElementById('fp-lyrics-btn').addEventListener('click', async () => {
     fpPanel.classList.add('active');
     
     const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-    const lyrics = await window.fetchLyrics(track.author, track.title);
-    fpContent.innerHTML = `<div id="lyrics-content">${window.escapeHTML(lyrics)}</div>`;
+    const result = await window.fetchLyrics(track.author, track.title);
+    
+    if (result.isSynced) {
+        fpContent.innerHTML = `<div id="lyrics-content">${result.html}</div>`;
+    } else {
+        fpContent.innerHTML = `<div id="lyrics-content" style="white-space: pre-wrap; text-align: center; color: var(--text-primary); font-size: 15px; line-height: 1.8;">${result.html}</div>`;
+    }
 });
 
-// Binding the Artist Name to trigger the Bio 
 document.getElementById('fp-artist').addEventListener('click', async () => {
     if(window.OCTAVE.currentIndex < 0) return;
     fpTitle.innerText = 'Artist Bio';
@@ -171,7 +173,6 @@ document.getElementById('fp-queue-btn').addEventListener('click', () => {
     }
 });
 
-// Routing Sleep Timer out of the 3-dots modal
 document.getElementById('opt-sleep-timer').addEventListener('click', () => {
     document.getElementById('track-options-modal').classList.remove('active');
     document.getElementById('timer-modal').classList.add('active');
@@ -188,14 +189,12 @@ if (fpOptionsBtn) {
 }
 
 window.renderHome = () => {
-    // --- DYNAMIC TIME GREETING LOGIC ---
     const hour = new Date().getHours();
     let greeting = 'Good evening';
     if (hour >= 5 && hour < 12) greeting = 'Good morning';
     else if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
     const greetingEl = document.getElementById('time-greeting');
     if (greetingEl) greetingEl.textContent = greeting;
-    // -----------------------------------
 
     const recentGrid = document.getElementById('home-recent-grid');
     const playlistsDiv = document.getElementById('home-playlists');
@@ -212,7 +211,6 @@ window.renderHome = () => {
         });
     }
 
-    // RECOMMENDED GRID LOGIC
     const recsGrid = document.getElementById('home-recs-grid');
     const recsSection = document.getElementById('recommended-section');
     if (recsGrid && recsSection) {
@@ -241,7 +239,7 @@ window.renderHome = () => {
             <div class="list-info"><div class="list-title">Liked Songs</div><div class="list-subtitle">${likedCount} tracks saved</div></div>
         </div>
     `;
-    document.getElementById('open-discover-mix').addEventListener('click', window.generateDiscoverMix);
+    document.getElementById('open-discover-mix').addEventListener('click', () => { if(window.generateDiscoverMix) window.generateDiscoverMix(); });
     document.getElementById('open-liked-songs').addEventListener('click', window.renderLikedSongs);
     
     Object.keys(window.OCTAVE.playlists).forEach(plName => {
@@ -287,7 +285,7 @@ window.renderPlaylistDetail = (plName) => {
             <div style="color: var(--text-secondary); font-size: 14px; margin-bottom: 24px;">${pl.length} tracks • ${totalPlays} lifetime plays</div>
             <div style="display: flex; gap: 12px;">
                 <button class="btn-primary" onclick="window.playPlaylist('${plName}')" style="flex: 1; padding: 14px; border-radius: 100px; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fa-solid fa-play"></i> Play All</button>
-                <button class="btn-secondary" onclick="window.smartShufflePlaylist('${plName}')" style="flex: 1; padding: 14px; border-radius: 100px; display: flex; align-items: center; justify-content: center; gap: 8px; border-color: var(--accent); color: var(--accent);"><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Shuffle</button>
+                <button class="btn-secondary" onclick="if(window.smartShufflePlaylist) window.smartShufflePlaylist('${plName}')" style="flex: 1; padding: 14px; border-radius: 100px; display: flex; align-items: center; justify-content: center; gap: 8px; border-color: var(--accent); color: var(--accent);"><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Shuffle</button>
             </div>
         </div>
         <div class="vertical-list" id="playlist-detail-list" style="padding: 0 20px;"></div>
