@@ -1,8 +1,7 @@
 // ============================================================
 // player.js — Octave IFrame Audio Engine
 // Restored pure client-side YouTube IFrame for instant loading.
-// 10-point tracking, Wikipedia fallback, and Liquid Shadows preserved.
-// Use Brave Browser for background playback.
+// Features "The Auto-Pause Defense" for seamless background play.
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -133,18 +132,13 @@ fetch('https://api.invidious.io/instances.json?sort_by=health')
 window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
 
 // ─── SILENT KEEPALIVE ENGINE ──────────────────────────────────────────────────
-// Holds the browser audio session open via Web Audio API so the YouTube iframe
-// continues playing in the background on Chrome Android / mobile browsers.
 let _audioCtx = null;
 let _silentNode = null;
 
 function startSilentKeepAlive() {
-    if (_silentNode) return; // already running
+    if (_silentNode) return; 
     try {
         _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-        // Rule: if the browser ever suspends this context, resume it immediately.
-        // This keeps our audio session alive permanently — no retries, no fighting.
         _audioCtx.onstatechange = () => {
             if (_audioCtx && _audioCtx.state === 'suspended') {
                 _audioCtx.resume();
@@ -163,6 +157,10 @@ function startSilentKeepAlive() {
     }
 }
 
+// 10% FIX: Lock the audio instantly on the very first tap anywhere on the screen
+document.addEventListener('click', startSilentKeepAlive, { once: true });
+document.addEventListener('touchstart', startSilentKeepAlive, { once: true });
+
 function stopSilentKeepAlive() {
     try {
         if (_audioCtx) _audioCtx.onstatechange = null;
@@ -171,8 +169,6 @@ function stopSilentKeepAlive() {
     } catch (e) {}
 }
 
-// Web Audio Context must be resumed after a user gesture (browser policy).
-// We hook into the first real play action to activate it.
 function resumeAudioContext() {
     if (_audioCtx && _audioCtx.state === 'suspended') {
         _audioCtx.resume();
@@ -183,7 +179,8 @@ function resumeAudioContext() {
 let YTP = null,
     ytReady = false,
     progressTimer = null,
-    sleepTimerId = null;
+    sleepTimerId = null,
+    isMediaSessionPause = false; // Tracks if the user intentionally pressed pause
 
 const script = document.createElement('script');
 script.src = 'https://www.youtube.com/iframe_api';
@@ -203,7 +200,6 @@ window.onYouTubeIframeAPIReady = () => {
             onReady: e => {
                 ytReady = true;
                 e.target.setVolume(100);
-                // Restores last played track UI and audio cue on startup
                 if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.queue.length > 0) {
                     const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
                     updatePlayerUI(track);
@@ -221,14 +217,24 @@ function onYTS(e) {
         window.OCTAVE.isPlaying = true;
         updatePlayIcons('fa-solid fa-pause');
         startProgressTracking();
-        startSilentKeepAlive();   // 🔇 hold audio session open for background play
+        startSilentKeepAlive();   
         resumeAudioContext();
         syncMediaSessionPosition();
     } else if (e.data === YT.PlayerState.PAUSED) {
+        
+        // THE 10% FIX: The Auto-Pause Defense
+        // If the document is hidden and the user didn't press the notification pause button, 
+        // it means Chrome is trying to kill our background audio. Force it back on instantly!
+        if (document.hidden && !isMediaSessionPause) {
+            console.log("Defeating Chrome auto-pause...");
+            YTP.playVideo();
+            return; // Skip the rest of the pause logic
+        }
+
         window.OCTAVE.isPlaying = false;
         updatePlayIcons('fa-solid fa-play');
         clearInterval(progressTimer);
-        stopSilentKeepAlive();    // 🔇 release audio session when paused
+        stopSilentKeepAlive();    
     } else if (e.data === YT.PlayerState.ENDED) {
         window.OCTAVE.isPlaying = false;
         
@@ -252,7 +258,7 @@ function updatePlayIcons(iconClass) {
 
 window.togglePlay = () => {
     if (!YTP || window.OCTAVE.currentIndex === -1) return;
-    resumeAudioContext(); // ensure AudioContext is live on user gesture
+    resumeAudioContext(); 
     window.OCTAVE.isPlaying ? YTP.pauseVideo() : YTP.playVideo();
 };
 
@@ -301,7 +307,15 @@ function updateMediaSession(track) {
     });
 
     navigator.mediaSession.setActionHandler('play', () => { window.togglePlay(); });
-    navigator.mediaSession.setActionHandler('pause', () => { window.togglePlay(); });
+    
+    // 10% FIX: We set a flag so the app knows the user INTENTIONALLY paused it
+    navigator.mediaSession.setActionHandler('pause', () => { 
+        isMediaSessionPause = true;
+        window.togglePlay(); 
+        // Reset the flag after half a second
+        setTimeout(() => isMediaSessionPause = false, 500);
+    });
+    
     navigator.mediaSession.setActionHandler('nexttrack', () => { document.getElementById('fp-next')?.click(); });
     navigator.mediaSession.setActionHandler('previoustrack', () => { window.playPrev(); });
 
@@ -734,6 +748,13 @@ window.fetchFullArtistProfile = async (artist) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    
+    // Restores last played track UI and audio cue on startup
+    if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.queue.length > 0) {
+        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
+        updatePlayerUI(track);
+    }
+
     document.querySelector('.mini-player')?.addEventListener('click', (e) => {
         const rect = document.querySelector('.mini-player').getBoundingClientRect();
         if (e.clientY - rect.top <= 10) {
