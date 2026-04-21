@@ -1,6 +1,8 @@
 // ============================================================
 // player.js — Octave IFrame Audio Engine
-// Features "The Invisible Video Exploit" for OS-level backgrounding.
+// Restored pure client-side YouTube IFrame for instant loading.
+// 10-point tracking, Wikipedia fallback, and Liquid Shadows preserved.
+// Use Brave Browser for background playback.
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -130,38 +132,58 @@ fetch('https://api.invidious.io/instances.json?sort_by=health')
 
 window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
 
-// ─── THE INVISIBLE VIDEO EXPLOIT (NO-SLEEP HACK) ──────────────────────────────
-let _nosleepVideo = null;
+// ─── SILENT KEEPALIVE ENGINE ──────────────────────────────────────────────────
+// Holds the browser audio session open via Web Audio API so the YouTube iframe
+// continues playing in the background on Chrome Android / mobile browsers.
+let _audioCtx = null;
+let _silentNode = null;
 
-function startNoSleepVideo() {
-    if (_nosleepVideo) return; 
+function startSilentKeepAlive() {
+    if (_silentNode) return; // already running
     try {
-        _nosleepVideo = document.createElement('video');
-        _nosleepVideo.setAttribute('playsinline', 'true');
-        _nosleepVideo.setAttribute('muted', 'true');
-        _nosleepVideo.setAttribute('loop', 'true');
-        _nosleepVideo.style.cssText = 'position:fixed; width:1px; height:1px; bottom:0; right:0; opacity:0; pointer-events:none; z-index:-999;';
-        
-        // Base64 string of a tiny, silent dummy video
-        _nosleepVideo.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMQAAAAx8bWRhdAAAAAAABXhtb292AAAAbG12aGQAAAAAAM1r2QDNa9kAAQAAACQAAwEAAAAAAAEAAQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAACx0cmFrAAAAXHRraGQAAAAzAADNa9kAzWvZAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAA';
-        
-        document.body.appendChild(_nosleepVideo);
-        _nosleepVideo.play().catch(e => console.warn('No-sleep video blocked:', e));
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Rule: if the browser ever suspends this context, resume it immediately.
+        // This keeps our audio session alive permanently — no retries, no fighting.
+        _audioCtx.onstatechange = () => {
+            if (_audioCtx && _audioCtx.state === 'suspended') {
+                _audioCtx.resume();
+            }
+        };
+
+        const buffer = _audioCtx.createBuffer(1, _audioCtx.sampleRate, _audioCtx.sampleRate);
+        const source = _audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(_audioCtx.destination);
+        source.start(0);
+        _silentNode = source;
     } catch (e) {
-        console.warn('Silent video hack failed to start:', e);
+        console.warn('Silent keepalive failed to start:', e);
     }
 }
 
-// Lock the video loop instantly on the very first tap anywhere on the screen
-document.addEventListener('click', startNoSleepVideo, { once: true });
-document.addEventListener('touchstart', startNoSleepVideo, { once: true });
+function stopSilentKeepAlive() {
+    try {
+        if (_audioCtx) _audioCtx.onstatechange = null;
+        if (_silentNode) { _silentNode.stop(); _silentNode = null; }
+        if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
+    } catch (e) {}
+}
+
+// Web Audio Context must be resumed after a user gesture (browser policy).
+// We hook into the first real play action to activate it.
+function resumeAudioContext() {
+    if (_audioCtx && _audioCtx.state === 'suspended') {
+        _audioCtx.resume();
+    }
+}
 
 // ─── IFRAME ENGINE ────────────────────────────────────────────────────────────
 let YTP = null,
     ytReady = false,
     progressTimer = null,
-    sleepTimerId = null,
-    isMediaSessionPause = false;
+    sleepTimerId = null;
 
 const script = document.createElement('script');
 script.src = 'https://www.youtube.com/iframe_api';
@@ -181,6 +203,7 @@ window.onYouTubeIframeAPIReady = () => {
             onReady: e => {
                 ytReady = true;
                 e.target.setVolume(100);
+                // Restores last played track UI and audio cue on startup
                 if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.queue.length > 0) {
                     const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
                     updatePlayerUI(track);
@@ -198,18 +221,14 @@ function onYTS(e) {
         window.OCTAVE.isPlaying = true;
         updatePlayIcons('fa-solid fa-pause');
         startProgressTracking();
+        startSilentKeepAlive();   // 🔇 hold audio session open for background play
+        resumeAudioContext();
         syncMediaSessionPosition();
     } else if (e.data === YT.PlayerState.PAUSED) {
-        
-        if (document.hidden && !isMediaSessionPause) {
-            console.log("Defeating Chrome auto-pause...");
-            YTP.playVideo();
-            return; 
-        }
-
         window.OCTAVE.isPlaying = false;
         updatePlayIcons('fa-solid fa-play');
         clearInterval(progressTimer);
+        stopSilentKeepAlive();    // 🔇 release audio session when paused
     } else if (e.data === YT.PlayerState.ENDED) {
         window.OCTAVE.isPlaying = false;
         
@@ -233,6 +252,7 @@ function updatePlayIcons(iconClass) {
 
 window.togglePlay = () => {
     if (!YTP || window.OCTAVE.currentIndex === -1) return;
+    resumeAudioContext(); // ensure AudioContext is live on user gesture
     window.OCTAVE.isPlaying ? YTP.pauseVideo() : YTP.playVideo();
 };
 
@@ -281,13 +301,7 @@ function updateMediaSession(track) {
     });
 
     navigator.mediaSession.setActionHandler('play', () => { window.togglePlay(); });
-    
-    navigator.mediaSession.setActionHandler('pause', () => { 
-        isMediaSessionPause = true;
-        window.togglePlay(); 
-        setTimeout(() => isMediaSessionPause = false, 500);
-    });
-    
+    navigator.mediaSession.setActionHandler('pause', () => { window.togglePlay(); });
     navigator.mediaSession.setActionHandler('nexttrack', () => { document.getElementById('fp-next')?.click(); });
     navigator.mediaSession.setActionHandler('previoustrack', () => { window.playPrev(); });
 
@@ -720,12 +734,6 @@ window.fetchFullArtistProfile = async (artist) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    
-    if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.queue.length > 0) {
-        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-        updatePlayerUI(track);
-    }
-
     document.querySelector('.mini-player')?.addEventListener('click', (e) => {
         const rect = document.querySelector('.mini-player').getBoundingClientRect();
         if (e.clientY - rect.top <= 10) {
