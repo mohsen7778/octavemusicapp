@@ -1,171 +1,232 @@
-import { google } from "googleapis";
-import fs from "fs";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Octave | Premium Audio</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
 
-const {
-  GITHUB_TOKEN,
-  OWNER,
-  REPO,
-  GOOGLE_KEY,
-  FOLDER_ID,
-  INTERVAL = 10000
-} = process.env;
+    <div id="splash-screen" class="splash-screen">
+        <img src="logo.png" alt="Octave Logo" class="splash-logo" onerror="this.style.display='none'">
+        <p class="splash-text">"Free music subscription was promised to you 3000 years ago..."</p>
+    </div>
 
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(GOOGLE_KEY),
-  scopes: ["https://www.googleapis.com/auth/drive"],
-});
+    <div class="mobile-app">
+        
+        <main class="main-content scroll-y" id="dynamic-view">
+            <header class="app-header">
+                <div class="greeting">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="logo.png" alt="Logo" style="width: 44px; height: 44px; border-radius: 12px; object-fit: cover; box-shadow: var(--shadow-soft);" onerror="this.style.display='none'">
+                        <h1 id="time-greeting" style="margin: 0; line-height: 44px; font-size: 24px;">Good evening</h1>
+                    </div>
+                    <div class="header-actions">
+                        <button class="icon-btn" id="menu-btn"><i class="fa-solid fa-bars"></i></button>
+                    </div>
+                </div>
+                <div class="filter-chips scroll-x">
+                    <div class="chip active">All</div>
+                    <div class="chip">Music</div>
+                    <div class="chip">Podcasts</div>
+                </div>
+            </header>
 
-const drive = google.drive({ version: "v3", auth });
+            <section class="content-section">
+                <h2 class="section-title">Recently Played</h2>
+                <div class="horizontal-scroll scroll-x" id="home-recent-grid">
+                    <div style="color: var(--text-secondary); font-size: 13px; padding-bottom: 20px;">Play some tracks to build your history...</div>
+                </div>
+            </section>
 
-// ─── Persistent storage ─────────────────────────────────────
-const ID_FILE = "lastProcessedId.txt";
-let lastProcessedId = null;
+            <section class="content-section" id="trending-section">
+                <h2 class="section-title">Global Top 50 Trending <i class="fa-solid fa-fire" style="color: #ff5000; font-size: 16px; margin-left: 4px;"></i></h2>
+                <div class="horizontal-scroll scroll-x" id="home-trending-grid">
+                    <div style="color: var(--text-secondary); font-size: 13px; padding-bottom: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading charts...</div>
+                </div>
+            </section>
 
-if (fs.existsSync(ID_FILE)) {
-  lastProcessedId = fs.readFileSync(ID_FILE, "utf8").trim();
-}
+            <section class="content-section" id="recommended-section">
+                <h2 class="section-title">Recommended For You</h2>
+                <div class="horizontal-scroll scroll-x" id="home-recs-grid">
+                    <div style="color: var(--text-secondary); font-size: 13px; padding-bottom: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Finding your vibe...</div>
+                </div>
+            </section>
 
-function saveLastId(id) {
-  lastProcessedId = id;
-  fs.writeFileSync(ID_FILE, id);
-}
+            <section class="content-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-right: 20px; margin-bottom: 16px;">
+                    <h2 class="section-title" style="margin-bottom: 0;">Your Heavy Duty Mixes</h2>
+                    <button class="icon-btn" id="open-create-playlist"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div class="vertical-list" id="home-playlists"></div>
+            </section>
+            <div class="bottom-spacer"></div>
+        </main>
 
-// ─── GitHub Upload & Append Engine ──────────────────────────
-async function uploadToGitHub(fileName, newText, action) {
-  const path = `generated/${fileName}`; // No forced .html
-  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+        <div class="mini-player glass-panel">
+            <div class="progress-bar-mini" id="mini-progress" style="width: 0%;"></div>
+            <div class="mini-inner">
+                <div class="mini-art" id="mini-art-el"></div>
+                <div class="mini-info">
+                    <div class="mini-title" id="mini-title-el">Nothing Playing</div>
+                    <div class="mini-artist" id="mini-artist-el">Select a track</div>
+                </div>
+                <div class="mini-controls">
+                    <button class="icon-btn" id="mini-like-btn"><i class="fa-regular fa-heart"></i></button>
+                    <button class="icon-btn play-btn-mini"><i class="fa-solid fa-play"></i></button>
+                </div>
+            </div>
+        </div>
 
-  let sha = null;
-  let finalContent = newText;
+        <div id="full-player" class="full-player-overlay">
+            <div class="fp-header">
+                <button class="icon-btn" id="close-fp"><i class="fa-solid fa-chevron-down"></i></button>
+                <span class="fp-header-title">Now Playing</span>
+                <button class="icon-btn" id="fp-options"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            </div>
+            
+            <div class="fp-art-container">
+                <img id="fp-art" src="" alt="Album Art">
+            </div>
+            
+            <div class="fp-info-row">
+                <div class="fp-meta">
+                    <h2 id="fp-title">Nothing Playing</h2>
+                    <p id="fp-artist" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: underline dashed;">Select a track</p>
+                </div>
+                <button class="icon-btn" id="fp-like"><i class="fa-regular fa-heart"></i></button>
+            </div>
 
-  try {
-    // Check if file exists
-    const getRes = await fetch(url, {
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        "User-Agent": "drive-bot"
-      }
-    });
+            <div class="fp-actions-grid">
+                <button class="icon-btn" id="fp-lyrics-btn"><i class="fa-solid fa-align-left"></i> Lyrics</button>
+                <button class="icon-btn" id="fp-queue-btn"><i class="fa-solid fa-list-ol"></i> Up Next</button>
+            </div>
 
-    if (getRes.ok) {
-      const fileData = await getRes.json();
-      sha = fileData.sha;
-      
-      if (action === "append") {
-        // Decode existing content and add new text to the bottom
-        const existingText = Buffer.from(fileData.content, "base64").toString("utf8");
-        finalContent = existingText + "\n\n" + newText;
-        console.log(`Appending to existing file: ${fileName}`);
-      } else {
-        console.log(`Overwriting existing file: ${fileName}`);
-      }
-    } else if (action === "append") {
-        console.log(`File not found for append, creating new file: ${fileName}`);
-    }
+            <div class="fp-progress-section">
+                <div class="fp-progress-bar" id="fp-progress-container">
+                    <div class="fp-progress-fill" id="fp-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div class="fp-time-row">
+                    <span id="fp-time-current">0:00</span>
+                    <span id="fp-time-total">0:00</span>
+                </div>
+            </div>
+            
+            <div class="fp-controls">
+                <button class="icon-btn sm" id="fp-prev"><i class="fa-solid fa-backward-step"></i></button>
+                <button class="play-btn-huge" id="fp-play"><i class="fa-solid fa-play"></i></button>
+                <button class="icon-btn sm" id="fp-next"><i class="fa-solid fa-forward-step"></i></button>
+            </div>
 
-    const encoded = Buffer.from(finalContent).toString("base64");
+            <div id="fp-overlay-panel" class="full-overlay-panel">
+                <div class="panel-header">
+                    <h2 id="fp-overlay-title">Title</h2>
+                    <button class="icon-btn" id="close-fp-overlay"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="fp-overlay-content" class="scroll-y" style="flex: 1; padding-bottom: 20px;"></div>
+            </div>
+        </div>
 
-    const payload = {
-      message: `${action} via drive bot: ${fileName}`,
-      content: encoded,
-    };
+        <nav class="bottom-nav glass-panel">
+            <div class="nav-item active" data-tab="home"><i class="fa-solid fa-house"></i><span>Home</span></div>
+            <div class="nav-item" data-tab="search"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></div>
+            <div class="nav-item" data-tab="library"><i class="fa-solid fa-layer-group"></i><span>Library</span></div>
+            <div class="nav-item" data-tab="premium"><i class="fa-solid fa-crown"></i><span>Premium</span></div>
+        </nav>
 
-    if (sha) payload.sha = sha;
+        <div class="drawer-backdrop" id="menu-backdrop"></div>
+        <div class="side-drawer" id="side-menu">
+            <div class="drawer-header">
+                <h2>Settings</h2>
+                <button class="icon-btn" id="close-menu"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="drawer-links">
+                <div class="drawer-item" id="export-vault-btn"><i class="fa-solid fa-download"></i> Backup Vault</div>
+                <div class="drawer-item" id="import-vault-btn"><i class="fa-solid fa-upload"></i> Restore Vault</div>
+                <input type="file" id="import-vault-input" style="display:none" accept=".json">
+                <div style="height: 1px; background: var(--glass-border); margin: 10px 0;"></div>
+                <div class="drawer-item" data-page="terms.html"><i class="fa-solid fa-scale-balanced"></i> Terms & Conditions</div>
+                <div class="drawer-item" data-page="contact.html"><i class="fa-brands fa-instagram"></i> Contact Support</div>
+            </div>
+        </div>
 
-    const putRes = await fetch(url, {
-      method: "PUT",
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        "Content-Type": "application/json",
-        "User-Agent": "drive-bot"
-      },
-      body: JSON.stringify(payload),
-    });
+        <div class="modal-overlay" id="brave-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <div style="font-size: 40px; color: #ff5000; margin-bottom: 16px; text-align: center;"><i class="fa-brands fa-brave"></i></div>
+                <h3 style="text-align: center; margin-bottom: 12px;">Use Brave Browser</h3>
+                <p style="color: var(--text-secondary); font-size: 14px; text-align: center; margin-bottom: 24px; line-height: 1.5;">For the ultimate heavy-duty experience with unkillable background play and zero ads, we strictly recommend launching Octave in Brave Browser.</p>
+                <div class="modal-actions">
+                    <button class="btn-secondary" id="close-brave">Maybe Later</button>
+                    <a href="https://play.google.com/store/apps/details?id=com.brave.browser" target="_blank" class="btn-primary" id="get-brave" style="color: var(--bg-deep); text-decoration: none;">Get Brave</a>
+                </div>
+            </div>
+        </div>
 
-    if (!putRes.ok) {
-      const err = await putRes.text();
-      throw new Error(`${putRes.status} - ${err}`);
-    }
+        <div class="modal-overlay" id="timer-modal">
+            <div class="modal-content glass-panel shadow-heavy" style="text-align: center;">
+                <h3 style="margin-bottom: 16px;">Sleep Timer</h3>
+                <div class="vertical-list">
+                    <div class="drawer-item" style="justify-content: center;" onclick="window.setSleepTimer(15)">15 Minutes</div>
+                    <div class="drawer-item" style="justify-content: center;" onclick="window.setSleepTimer(30)">30 Minutes</div>
+                    <div class="drawer-item" style="justify-content: center;" onclick="window.setSleepTimer(60)">60 Minutes</div>
+                    <div class="drawer-item" style="justify-content: center; color: #ff4444;" onclick="window.setSleepTimer(0)">Turn Off Timer</div>
+                </div>
+                <button class="btn-secondary" style="margin-top: 16px; width: 100%;" id="close-timer">Cancel</button>
+            </div>
+        </div>
 
-    console.log("Success:", path);
+        <div class="modal-overlay" id="playlist-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <h3 style="margin-bottom: 16px;">Create Playlist</h3>
+                <input type="text" id="playlist-name" class="modern-input" placeholder="Playlist Name (e.g. Gym Heavy)" autocomplete="off">
+                <div class="modal-actions" style="margin-top: 24px;">
+                    <button class="btn-secondary" id="close-playlist">Cancel</button>
+                    <button class="btn-primary" id="save-playlist" style="color: var(--bg-deep);">Create</button>
+                </div>
+            </div>
+        </div>
 
-  } catch (err) {
-    console.error("GitHub upload error:", err.message);
-    throw err; // Throw error to prevent Drive rename on failure
-  }
-}
+        <div class="modal-overlay" id="track-options-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <div id="opt-track-info" style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); padding-bottom: 16px;"></div>
+                <div class="vertical-list">
+                    <div class="drawer-item" id="opt-like-track"><i class="fa-regular fa-heart"></i> <span>Like Track</span></div>
+                    <div class="drawer-item" id="opt-add-playlist"><i class="fa-solid fa-list"></i> <span>Add to Playlist</span></div>
+                    <div class="drawer-item" id="opt-sleep-timer"><i class="fa-solid fa-clock"></i> <span>Sleep Timer</span></div>
+                </div>
+                <button class="btn-secondary" style="margin-top: 16px; width: 100%;" id="close-track-options">Cancel</button>
+            </div>
+        </div>
 
-// ─── Main loop ──────────────────────────────────────────────
-async function main() {
-  try {
-    const res = await drive.files.list({
-      q: `'${FOLDER_ID}' in parents`,
-      fields: "files(id, name, mimeType, createdTime)",
-      orderBy: "createdTime desc",
-      pageSize: 5,
-    });
+        <div class="modal-overlay" id="select-playlist-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <h3 style="margin-bottom: 16px;">Select Playlist</h3>
+                <div class="vertical-list scroll-y" id="playlist-selection-list" style="max-height: 250px; margin-bottom: 16px;"></div>
+                <button class="btn-secondary" style="width: 100%;" id="close-select-playlist">Cancel</button>
+            </div>
+        </div>
 
-    // Remove the lastProcessedId check here so it relies entirely on the file prefix
-    const file = res.data.files.find(
-      f =>
-        f.mimeType === "application/vnd.google-apps.document" &&
-        (f.name.startsWith("upload-") || f.name.startsWith("append-"))
-    );
+        <div class="modal-overlay" id="yt-import-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <h3 style="margin-bottom: 16px;">Import YouTube Playlist</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">Paste a public YouTube playlist URL. The algorithm will rip the tracks directly to your vault.</p>
+                <input type="text" id="yt-playlist-url" class="modern-input" placeholder="https://youtube.com/playlist?list=..." autocomplete="off">
+                <div class="modal-actions" style="margin-top: 24px;">
+                    <button class="btn-secondary" id="close-yt-import">Cancel</button>
+                    <button class="btn-primary" id="start-yt-import" style="color: var(--bg-deep);"><i class="fa-brands fa-youtube" style="margin-right: 6px;"></i> Import</button>
+                </div>
+            </div>
+        </div>
 
-    if (!file) {
-      console.log("No new file");
-      return;
-    }
+    </div>
 
-    console.log("Processing:", file.name);
-
-    let action = "upload";
-    let cleanName = file.name;
-
-    // Detect action based on prefix
-    if (file.name.startsWith("append-")) {
-      action = "append";
-      cleanName = file.name.replace(/^append-/, "");
-    } else if (file.name.startsWith("upload-")) {
-      action = "upload";
-      cleanName = file.name.replace(/^upload-/, "");
-    }
-
-    // Ensure extension exists
-    if (!cleanName.includes(".")) {
-      cleanName += ".html";
-    }
-
-    const contentRes = await drive.files.export({
-      fileId: file.id,
-      mimeType: "text/plain",
-    });
-
-    // ─── Text Cleaner (BOM and Smart Quotes) ───
-    let cleanText = contentRes.data
-      .replace(/^\uFEFF/, '') 
-      .replace(/[\u2018\u2019]/g, "'") 
-      .replace(/[\u201C\u201D]/g, '"'); 
-
-    // Wait for GitHub upload to succeed before moving on
-    await uploadToGitHub(cleanName, cleanText, action);
-
-    // ─── THE LOOP FIX: Rename the file in Drive ───
-    const newFileName = file.name.replace(/^(upload|append)-/, 'done-');
-    
-    await drive.files.update({
-      fileId: file.id,
-      requestBody: {
-        name: newFileName
-      }
-    });
-    
-    console.log(`Renamed in Drive to: ${newFileName} to prevent loop.`);
-    saveLastId(file.id);
-
-  } catch (err) {
-    console.error("Main loop error:", err.message);
-  }
-}
-
-setInterval(main, INTERVAL);
+    <script src="js/algorithm.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
