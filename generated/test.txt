@@ -1,1 +1,0 @@
-Bot successfully triggered. The prefix was stripped, text was cleaned, and upload to generated/test.txt was completed.
