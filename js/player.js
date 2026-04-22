@@ -142,43 +142,75 @@ fetch('https://api.invidious.io/instances.json?sort_by=health')
 
 window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
 
-// ─── SILENT KEEPALIVE ENGINE ──────────────────────────────────────────────────
-// Holds the browser audio session open via Web Audio API so the YouTube iframe
-// continues playing in the background on Chrome Android / mobile browsers.
+// ─── AUDIO SESSION ENGINE ────────────────────────────────────────────────────
+// Chrome only keeps a tab alive in background if it detects REAL audio output.
+// A zero-filled silent buffer is detected as silence and throttled.
+// Solution: 40Hz sine wave (below human hearing) at gain 0.001 — inaudible
+// but a real non-zero signal Chrome recognises as active audio output.
+// Combined with a Service Worker ping, this prevents tab suspension entirely.
 let _audioCtx = null;
-let _silentNode = null;
+let _oscillator = null;
+let _gainNode = null;
+let _swPingInterval = null;
 
 function startSilentKeepAlive() {
-    if (_silentNode) return; // already running
+    if (_oscillator) return;
     try {
         _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // Rule: if the browser ever suspends this context, resume it immediately.
-        // This keeps our audio session alive permanently — no retries, no fighting.
+        // Self-healing: if Android ever suspends the context, immediately resume
         _audioCtx.onstatechange = () => {
             if (_audioCtx && _audioCtx.state === 'suspended') {
                 _audioCtx.resume();
             }
         };
 
-        const buffer = _audioCtx.createBuffer(1, _audioCtx.sampleRate, _audioCtx.sampleRate);
-        const source = _audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        source.connect(_audioCtx.destination);
-        source.start(0);
-        _silentNode = source;
+        // 40Hz oscillator — below the human hearing threshold (~20Hz cutoff)
+        // Non-zero signal: Chrome sees active audio and will NOT throttle this tab
+        _oscillator = _audioCtx.createOscillator();
+        _gainNode = _audioCtx.createGain();
+        _oscillator.type = 'sine';
+        _oscillator.frequency.value = 40;     // sub-bass, inaudible on phone speakers
+        _gainNode.gain.value = 0.001;          // ~60dB below audible — truly silent to ears
+        _oscillator.connect(_gainNode);
+        _gainNode.connect(_audioCtx.destination);
+        _oscillator.start(0);
+
+        // Ping the Service Worker every 25s to keep the SW thread alive
+        // The SW runs in a separate thread — survives tab suspension
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            _swPingInterval = setInterval(() => {
+                navigator.serviceWorker.controller.postMessage('keepalive');
+            }, 25000);
+        }
     } catch (e) {
-        console.warn('Silent keepalive failed to start:', e);
+        console.warn('Audio session engine failed:', e);
     }
 }
 
 function stopSilentKeepAlive() {
     try {
+        clearInterval(_swPingInterval); _swPingInterval = null;
         if (_audioCtx) _audioCtx.onstatechange = null;
-        if (_silentNode) { _silentNode.stop(); _silentNode = null; }
+        if (_oscillator) { _oscillator.stop(); _oscillator = null; }
+        if (_gainNode) { _gainNode.disconnect(); _gainNode = null; }
         if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
     } catch (e) {}
+}
+
+// ─── SERVICE WORKER REGISTRATION ─────────────────────────────────────────────
+// SW runs in a separate thread independent of the tab's JS thread.
+// When Android suspends the tab, the SW stays alive and holds Chrome's process
+// open — preventing the tab from being fully killed.
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => {
+            // Attempt Background Sync registration for extra keepalive
+            if ('SyncManager' in window) {
+                reg.sync.register('octave-keepalive').catch(() => {});
+            }
+        })
+        .catch(e => console.warn('SW registration failed:', e));
 }
 
 // Web Audio Context must be resumed after a user gesture (browser policy).
