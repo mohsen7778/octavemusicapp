@@ -771,3 +771,91 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
     btn.innerHTML = 'Import';
     btn.disabled = false;
 });
+
+
+// --- NATIVE SWIPE GESTURES ---
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // 1. Swipe Down to minimize Full Player
+    const fullPlayer = document.getElementById('full-player');
+    let fpStartY = 0;
+    let fpCurrentY = 0;
+
+    if (fullPlayer) {
+        fullPlayer.addEventListener('touchstart', (e) => {
+            // Guard: Don't trigger swipe down if the user is scrolling a list (like lyrics or queue)
+            if (e.target.closest('.scroll-y')) return; 
+            fpStartY = e.touches[0].clientY;
+        }, {passive: true});
+
+        fullPlayer.addEventListener('touchmove', (e) => {
+            if (e.target.closest('.scroll-y')) return;
+            fpCurrentY = e.touches[0].clientY;
+        }, {passive: true});
+
+        fullPlayer.addEventListener('touchend', (e) => {
+            if (e.target.closest('.scroll-y')) return;
+            if (fpStartY > 0 && fpCurrentY > fpStartY + 100) {
+                // Swiped down significantly -> Minimize player
+                fullPlayer.classList.remove('active');
+            }
+            fpStartY = 0;
+            fpCurrentY = 0;
+        });
+    }
+
+    // 2. Swipe Left/Right on Album Art to Skip Tracks
+    const artContainer = document.querySelector('.fp-art-container');
+    let artStartX = 0;
+    let artCurrentX = 0;
+
+    if (artContainer) {
+        artContainer.addEventListener('touchstart', (e) => {
+            artStartX = e.touches[0].clientX;
+        }, {passive: true});
+
+        artContainer.addEventListener('touchmove', (e) => {
+            artCurrentX = e.touches[0].clientX;
+        }, {passive: true});
+
+        artContainer.addEventListener('touchend', (e) => {
+            if (artStartX > 0 && artCurrentX > 0) {
+                const diffX = artStartX - artCurrentX;
+                if (diffX > 75) {
+                    // Swiped Left -> Next Track
+                    if (document.getElementById('fp-next')) document.getElementById('fp-next').click();
+                } else if (diffX < -75) {
+                    // Swiped Right -> Previous Track
+                    if (document.getElementById('fp-prev')) document.getElementById('fp-prev').click();
+                }
+            }
+            artStartX = 0;
+            artCurrentX = 0;
+        });
+    }
+
+    // 3. Swipe Right to dismiss Side Menu
+    const sideMenu = document.getElementById('side-menu');
+    let menuStartX = 0;
+    let menuCurrentX = 0;
+
+    if (sideMenu) {
+        sideMenu.addEventListener('touchstart', (e) => {
+            menuStartX = e.touches[0].clientX;
+        }, {passive: true});
+
+        sideMenu.addEventListener('touchmove', (e) => {
+            menuCurrentX = e.touches[0].clientX;
+        }, {passive: true});
+
+        sideMenu.addEventListener('touchend', (e) => {
+            if (menuStartX > 0 && menuCurrentX > menuStartX + 75) {
+                // Swiped Right -> Close Menu
+                sideMenu.classList.remove('active');
+                if (document.getElementById('menu-backdrop')) document.getElementById('menu-backdrop').classList.remove('active');
+            }
+            menuStartX = 0;
+            menuCurrentX = 0;
+        });
+    }
+});
