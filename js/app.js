@@ -2,8 +2,7 @@ document.addEventListener('DOMContentLoaded', () => { setTimeout(() => { const s
 Search
 Recently Searched
 `, library: `
-Library
-`, premium: `
+Library`, premium: `
 Octave Premium
 Ad-free background listening activated.
 ` }; document.querySelectorAll('.nav-item').forEach(item => { item.addEventListener('click', () => { document.querySelector('.nav-item.active').classList.remove('active'); item.classList.add('active'); const tab = item.getAttribute('data-tab'); if (tab === 'home') { dynamicView.innerHTML = views.home; window.renderHome(); bindHomeModals(); } else { dynamicView.innerHTML = views[tab]; if (tab === 'search') bindSearch(); if (tab === 'library') renderLibrary(); } }); }); handleBravePrompt(); bindHomeModals(); window.renderHome(); document.querySelector('.mini-inner').addEventListener('click', () => document.getElementById('full-player').classList.add('active')); document.getElementById('close-fp').addEventListener('click', () => document.getElementById('full-player').classList.remove('active')); document.getElementById('close-track-options').addEventListener('click', () => document.getElementById('track-options-modal').classList.remove('active')); document.getElementById('close-select-playlist').addEventListener('click', () => document.getElementById('select-playlist-modal').classList.remove('active')); }); document.body.addEventListener('click', async (e) => { if (e.target.closest('#menu-btn')) { document.getElementById('side-menu').classList.add('active'); document.getElementById('menu-backdrop').classList.add('active'); } if (e.target.closest('#close-menu') || e.target.closest('#menu-backdrop')) { document.getElementById('side-menu').classList.remove('active'); document.getElementById('menu-backdrop').classList.remove('active'); } if (e.target.closest('#open-yt-import')) { document.getElementById('yt-import-modal').classList.add('active'); } const pageBtn = e.target.closest('[data-page]'); if (pageBtn) { document.getElementById('side-menu').classList.remove('active'); document.getElementById('menu-backdrop').classList.remove('active'); const url = pageBtn.getAttribute('data-page'); const dynamicView = document.getElementById('dynamic-view'); dynamicView.innerHTML = '
@@ -19,22 +18,15 @@ ${html}
 `; }); window.setLyricsFont = (fontCss, el) => { window.OCTAVE.selectedFont = fontCss; localStorage.setItem('octave_font', fontCss); document.querySelectorAll('.font-option').forEach(opt => opt.classList.remove('active')); el.classList.add('active'); const container = document.getElementById('lyrics-content'); if (container && container.firstChild) { container.firstChild.style.fontFamily = `'${fontCss}', sans-serif`; } }; window.renderArtistPage = async (artistName) => { document.getElementById('full-player').classList.remove('active'); document.getElementById('fp-overlay-panel').classList.remove('active'); const dynamicView = document.getElementById('dynamic-view'); dynamicView.innerHTML = '
 '; const profile = await window.fetchFullArtistProfile(artistName); let tracksHTML = ''; if (profile.tracks.length > 0) { profile.tracks.forEach((track, index) => { tracksHTML += `
 
-
-
-
 ${window.escapeHTML(track.title)}
 ${window.escapeHTML(track.author)}
 `; }); } else { tracksHTML = '
 No tracks found.
 '; } const bannerStyle = profile.banner ? `background-image: url('${profile.banner}'); background-size: cover; background-position: center;` : `background: linear-gradient(135deg, var(--bg-deep), var(--glass-bg));`; dynamicView.innerHTML = `
 ${window.escapeHTML(profile.name)}
-
-
 ${window.escapeHTML(profile.bio)}
-Top Tracks
-${tracksHTML}
+Top Tracks${tracksHTML}
 `; if (profile.tracks.length > 0) { document.querySelectorAll('.artist-track-item').forEach((node, idx) => { node.addEventListener('click', () => { window.OCTAVE.queue = [...profile.tracks]; window.playTrackByIndex(idx); }); }); } }; document.getElementById('fp-artist').addEventListener('click', () => { if (window.OCTAVE.currentIndex < 0) return; const track = window.OCTAVE.queue[window.OCTAVE.currentIndex]; window.renderArtistPage(track.author); }); document.getElementById('fp-queue-btn').addEventListener('click', () => { if (window.OCTAVE.currentIndex < 0) return; fpTitle.innerText = 'Up Next'; fpContent.innerHTML = ''; fpPanel.classList.add('active'); const q = window.OCTAVE.queue; const curr = window.OCTAVE.currentIndex; for (let i = curr; i < q.length; i++) { const track = q[i]; const isPlaying = i === curr; const el = document.createElement('div'); el.style.cssText = `display: flex; align-items: center; gap: 14px; padding: 12px; background: ${isPlaying ? 'rgba(30,215,96,0.1)' : 'var(--bg-surface)'}; border-radius: 8px; margin-bottom: 12px; border: ${isPlaying ? '1px solid var(--accent)' : '1px solid transparent'};`; el.innerHTML = `
-
 
 ${window.escapeHTML(track.title)}
 ${window.escapeHTML(track.author)}
@@ -44,19 +36,12 @@ ${window.escapeHTML(track.title)}
 ${window.escapeHTML(track.title)}
 `; el.addEventListener('click', () => window.playTrack(track)); recsGrid.appendChild(el); }); } } if (window.fetchDailyRecommendations) window.fetchDailyRecommendations(); const likedCount = Object.keys(window.OCTAVE.liked).length; playlistsDiv.innerHTML = `
 
-
-
-
 Auto-DJ Discover Mix
 Endless tracks based on taste
-
-
-
 
 Liked Songs
 ${likedCount} tracks saved
 `; document.getElementById('open-discover-mix').addEventListener('click', () => { if (window.generateDiscoverMix) window.generateDiscoverMix(); }); document.getElementById('open-liked-songs').addEventListener('click', window.renderLikedSongs); Object.keys(window.OCTAVE.playlists).forEach(plName => { const el = document.createElement('div'); el.className = 'list-item'; el.innerHTML = `
-
 
 ${window.escapeHTML(plName)}
 ${window.OCTAVE.playlists[plName].length} tracks
@@ -64,11 +49,9 @@ ${window.OCTAVE.playlists[plName].length} tracks
 Create or import a playlist.
 '; Object.keys(window.OCTAVE.playlists).forEach(plName => { const el = document.createElement('div'); el.className = 'list-item'; el.innerHTML = `
 
-
 ${window.escapeHTML(plName)}
 ${window.OCTAVE.playlists[plName].length} tracks
 `; el.addEventListener('click', () => window.renderPlaylistDetail(plName)); lib.appendChild(el); }); } function buildTrackItem(track) { const el = document.createElement('div'); el.className = 'list-item'; el.innerHTML = `
-
 
 ${window.escapeHTML(track.title)}
 ${window.escapeHTML(track.author)}
