@@ -160,56 +160,82 @@ window.fetchTrendingMusic = async () => {
     if (!trendingGrid) return;
 
     const now = Date.now();
-    const ONE_HOUR = 60 * 60 * 1000;
+    const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
 
-    // Load from cache if fresh
+    // Load from cache if fresh (3 Days)
     if (window.OCTAVE.trendingData && window.OCTAVE.trendingData.tracks && window.OCTAVE.trendingData.tracks.length > 0) {
-        if (now - window.OCTAVE.trendingData.timestamp < ONE_HOUR) {
-            renderTrendingTracks(window.OCTAVE.trendingData.tracks, trendingGrid);
+        if (now - window.OCTAVE.trendingData.timestamp < THREE_DAYS) {
+            window.renderTrendingTracks(window.OCTAVE.trendingData.tracks, trendingGrid);
             return;
         }
     }
 
-    for (let i = 0; i < window.INVIDIOUS.length; i++) {
-        const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        try {
-            const r = await fetch(`${base}/api/v1/popular?videoCategory=10`, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            if (r.ok) {
-                const d = await r.json();
-                if (Array.isArray(d)) {
-                    const newTracks = d.filter(v => v.lengthSeconds && v.lengthSeconds < 600).slice(0, 15).map(rec => ({
-                        videoId: rec.videoId, title: rec.title, author: rec.author,
-                        thumb: (rec.videoThumbnails && rec.videoThumbnails.length > 0) ? rec.videoThumbnails[0].url : ''
-                    }));
-
-                    if (newTracks.length > 0) {
-                        window.OCTAVE.trendingData = {
-                            timestamp: now,
-                            tracks: newTracks
-                        };
-                        window.saveCache();
-                        renderTrendingTracks(newTracks, trendingGrid);
-                        break;
+    try {
+        // Fetch Top 20 from iTunes Open API
+        const r = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=20/json');
+        if (r.ok) {
+            const d = await r.json();
+            if (d.feed && d.feed.entry) {
+                const newTracks = d.feed.entry.map(entry => {
+                    // Grab the highest resolution thumb available
+                    let thumbUrl = '';
+                    if (entry['im:image'] && entry['im:image'].length > 0) {
+                        thumbUrl = entry['im:image'][entry['im:image'].length - 1].label;
                     }
+                    
+                    return {
+                        videoId: null, // We will fetch this dynamically on click
+                        title: entry['im:name'].label,
+                        author: entry['im:artist'].label,
+                        thumb: thumbUrl
+                    };
+                });
+
+                if (newTracks.length > 0) {
+                    window.OCTAVE.trendingData = {
+                        timestamp: now,
+                        tracks: newTracks
+                    };
+                    window.saveCache();
+                    window.renderTrendingTracks(newTracks, trendingGrid);
                 }
             }
-        } catch(e) { continue; }
+        }
+    } catch(e) { 
+        trendingGrid.innerHTML = '<div class="empty-state-text">Failed to load charts.</div>';
     }
 };
 
-function renderTrendingTracks(tracks, container) {
+window.renderTrendingTracks = (tracks, container) => {
     container.innerHTML = '';
     tracks.forEach(track => {
         const el = document.createElement('div');
         el.className = 'square-card';
         el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
-        el.addEventListener('click', () => window.playTrack(track));
+        
+        el.addEventListener('click', async () => {
+            // If we don't have the videoId yet, fetch it securely in the background
+            if (!track.videoId) {
+                el.style.opacity = '0.5'; // Visual feedback that it's loading
+                const query = `${track.author} ${track.title} audio`;
+                const results = await window.performSearch(query);
+                el.style.opacity = '1';
+                
+                if (results && results.length > 0) {
+                    track.videoId = results[0].videoId;
+                    window.saveCache(); // Save the found ID so we don't search for it again
+                    window.playTrack(track);
+                } else {
+                    alert("Could not find an audio stream for this track.");
+                }
+            } else {
+                window.playTrack(track);
+            }
+        });
+        
         container.appendChild(el);
     });
-}
+};
 
 window.generateDiscoverMix = async () => {
     const allKnown = [...Object.values(window.OCTAVE.liked), ...window.OCTAVE.recentPlayed];
