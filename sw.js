@@ -1,30 +1,29 @@
-const CACHE_NAME = 'octave-v1';
+const CACHE_NAME = 'octave-v2';
 const APP_ASSETS = [
-    './',
-    './index.html',
-    './css/style.css',
-    './js/app.js',
-    './js/player.js',
-    './js/algorithm.js',
-    './logo.png'
+    '/',
+    '/css/style.css',
+    '/js/app.js',
+    '/js/player.js',
+    '/js/algorithm.js',
+    '/logo.png'
 ];
 
 // Install the service worker and cache the app files
 self.addEventListener('install', (event) => {
+    self.skipWaiting(); // Forces the new service worker to activate immediately
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(APP_ASSETS);
+            // Soft caching so one missing file doesn't crash the whole PWA install
+            return Promise.allSettled(APP_ASSETS.map(url => cache.add(url)));
         })
     );
 });
 
-// Serve cached files when offline
+// Network First, Fallback to Cache strategy
 self.addEventListener('fetch', (event) => {
     event.respondWith(
-        caches.match(event.request).then((response) => {
-            return response || fetch(event.request);
-        }).catch(() => {
-            // Fallback if totally offline and not in cache
+        fetch(event.request).catch(() => {
+            return caches.match(event.request);
         })
     );
 });
