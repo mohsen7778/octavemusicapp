@@ -155,6 +155,62 @@ window.fetchDailyRecommendations = async () => {
     }
 };
 
+window.fetchTrendingMusic = async () => {
+    const trendingGrid = document.getElementById('home-trending-grid');
+    if (!trendingGrid) return;
+
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    // Load from cache if fresh
+    if (window.OCTAVE.trendingData && window.OCTAVE.trendingData.tracks && window.OCTAVE.trendingData.tracks.length > 0) {
+        if (now - window.OCTAVE.trendingData.timestamp < ONE_HOUR) {
+            renderTrendingTracks(window.OCTAVE.trendingData.tracks, trendingGrid);
+            return;
+        }
+    }
+
+    for (let i = 0; i < window.INVIDIOUS.length; i++) {
+        const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        try {
+            const r = await fetch(`${base}/api/v1/popular?videoCategory=10`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (r.ok) {
+                const d = await r.json();
+                if (Array.isArray(d)) {
+                    const newTracks = d.filter(v => v.lengthSeconds && v.lengthSeconds < 600).slice(0, 15).map(rec => ({
+                        videoId: rec.videoId, title: rec.title, author: rec.author,
+                        thumb: (rec.videoThumbnails && rec.videoThumbnails.length > 0) ? rec.videoThumbnails[0].url : ''
+                    }));
+
+                    if (newTracks.length > 0) {
+                        window.OCTAVE.trendingData = {
+                            timestamp: now,
+                            tracks: newTracks
+                        };
+                        window.saveCache();
+                        renderTrendingTracks(newTracks, trendingGrid);
+                        break;
+                    }
+                }
+            }
+        } catch(e) { continue; }
+    }
+};
+
+function renderTrendingTracks(tracks, container) {
+    container.innerHTML = '';
+    tracks.forEach(track => {
+        const el = document.createElement('div');
+        el.className = 'square-card';
+        el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
+        el.addEventListener('click', () => window.playTrack(track));
+        container.appendChild(el);
+    });
+}
+
 window.generateDiscoverMix = async () => {
     const allKnown = [...Object.values(window.OCTAVE.liked), ...window.OCTAVE.recentPlayed];
     if (allKnown.length === 0) {
