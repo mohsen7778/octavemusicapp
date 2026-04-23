@@ -12,11 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const views = {
         home: dynamicView.innerHTML,
         // SEARCH VIEW: YouTube Import button added near Search Title
-        search: \`
+        search: `
             <header class="search-header" style="padding: 40px 20px 20px 20px; background: var(--bg-deep);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h1 class="search-title" style="font-size: 24px; font-weight: 700; margin: 0;">Search</h1>
-                    <button class="icon-btn" id="open-yt-import" style="color: #ff0000; font-size: 16px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--glass-border); padding: 8px 16px; border-radius: 20px; background: var(--glass-bg);"><i class="fa-brands fa-youtube" style="font-size: 20px;"></i> Add playlist from YouTube</button>
+                    <button class="icon-btn" id="open-yt-import" style="color: #ff0000; font-size: 22px;"><i class="fa-brands fa-youtube"></i></button>
                 </div>
                 <div class="search-input-wrap" style="position: relative;">
                     <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
@@ -30,22 +30,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
             <div class="bottom-spacer"></div>
-        \`,
-        library: \`
+        `,
+        library: `
             <header class="search-header" style="padding: 40px 20px 20px 20px; display: flex; justify-content: space-between; align-items: center;">
                 <h1 class="search-title" style="font-size: 24px; font-weight: 700;">Library</h1>
-                <button class="icon-btn" id="open-yt-import" style="color: #ff0000; font-size: 16px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--glass-border); padding: 8px 16px; border-radius: 20px; background: var(--glass-bg);"><i class="fa-brands fa-youtube" style="font-size: 20px;"></i> Add playlist from YouTube</button>
+                <button class="icon-btn" id="open-yt-import" style="color: #ff0000; font-size: 24px;"><i class="fa-brands fa-youtube"></i></button>
             </header>
             <div id="lib-playlists" class="vertical-list" style="padding: 20px;"></div>
             <div class="bottom-spacer"></div>
-        \`,
-        premium: \`
+        `,
+        premium: `
             <div style="padding: 80px 20px; text-align: center;">
                 <img src="logo.png" style="width: 80px; height: 80px; border-radius: 16px; margin-bottom: 24px;" onerror="this.style.display='none'">
                 <h2 style="font-size: 24px; margin-bottom: 12px;">Octave Premium</h2>
                 <p style="color: var(--text-secondary); font-size: 14px;">Ad-free background listening activated.</p>
             </div>
-        \`
+        `
     };
 
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -87,9 +87,6 @@ document.body.addEventListener('click', async (e) => {
     }
     if (e.target.closest('#open-yt-import')) {
         document.getElementById('yt-import-modal').classList.add('active');
-    }
-    if (e.target.closest('#close-yt-import') || e.target.closest('#cancel-yt-import')) {
-        document.getElementById('yt-import-modal').classList.remove('active');
     }
 
     const pageBtn = e.target.closest('[data-page]');
@@ -156,14 +153,14 @@ document.getElementById('fp-lyrics-btn').addEventListener('click', async () => {
         { name: 'Impact', css: 'Bebas Neue' }
     ];
 
-    let fontHeader = \`<div class="lyrics-font-selector scroll-x">\`;
+    let fontHeader = `<div class="lyrics-font-selector scroll-x">`;
     fonts.forEach(f => {
         const activeClass = window.OCTAVE.selectedFont === f.css ? 'active' : '';
-        fontHeader += \`<div class="font-option \${activeClass}" style="font-family: '\${f.css}', sans-serif;" onclick="window.setLyricsFont('\${f.css}', this)">\${f.name}</div>\`;
+        fontHeader += `<div class="font-option ${activeClass}" style="font-family: '${f.css}', sans-serif;" onclick="window.setLyricsFont('${f.css}', this)">${f.name}</div>`;
     });
-    fontHeader += \`</div>\`;
+    fontHeader += `</div>`;
 
-    fpContent.innerHTML = fontHeader + \`<div id="lyrics-content">\${html}</div>\`;
+    fpContent.innerHTML = fontHeader + `<div id="lyrics-content">${html}</div>`;
 });
 
 window.setLyricsFont = (fontCss, el) => {
@@ -173,7 +170,7 @@ window.setLyricsFont = (fontCss, el) => {
     el.classList.add('active');
     const container = document.getElementById('lyrics-content');
     if (container && container.firstChild) {
-        container.firstChild.style.fontFamily = \`'\${fontCss}', sans-serif\`;
+        container.firstChild.style.fontFamily = `'${fontCss}', sans-serif`;
     }
 };
 
@@ -187,38 +184,38 @@ window.renderArtistPage = async (artistName) => {
     let tracksHTML = '';
     if (profile.tracks.length > 0) {
         profile.tracks.forEach((track, index) => {
-            tracksHTML += \`
+            tracksHTML += `
                 <div class="artist-track-item" style="display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--bg-surface); border-radius: 8px; margin-bottom: 12px; cursor: pointer;">
-                    <img src="\${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;">
+                    <img src="${track.thumb}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;">
                     <div style="flex: 1; min-width: 0;">
-                        <div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">\${window.escapeHTML(track.title)}</div>
-                        <div style="font-size: 12px; color: var(--text-secondary);">\${window.escapeHTML(track.author)}</div>
+                        <div style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">${window.escapeHTML(track.title)}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">${window.escapeHTML(track.author)}</div>
                     </div>
                     <button class="icon-btn" style="color: var(--accent);"><i class="fa-solid fa-play"></i></button>
                 </div>
-            \`;
+            `;
         });
     } else {
         tracksHTML = '<div class="empty-state-text">No tracks found.</div>';
     }
 
-    const bannerStyle = profile.banner ? \`background-image: url('\${profile.banner}'); background-size: cover; background-position: center;\` : \`background: linear-gradient(135deg, var(--bg-deep), var(--glass-bg));\`;
+    const bannerStyle = profile.banner ? `background-image: url('${profile.banner}'); background-size: cover; background-position: center;` : `background: linear-gradient(135deg, var(--bg-deep), var(--glass-bg));`;
 
-    dynamicView.innerHTML = \`
-        <div style="position: relative; width: 100%; height: 250px; \${bannerStyle}">
+    dynamicView.innerHTML = `
+        <div style="position: relative; width: 100%; height: 250px; ${bannerStyle}">
             <div style="position: absolute; inset: 0; background: linear-gradient(0deg, var(--bg-deep) 0%, transparent 100%);"></div>
             <button class="icon-btn" onclick="document.querySelector('.nav-item.active').click()" style="position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.5); border-radius: 50%; padding: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;"><i class="fa-solid fa-arrow-left"></i></button>
             <div style="position: absolute; bottom: 20px; left: 20px;">
-                <h1 style="font-size: 32px; font-weight: 800; text-shadow: 0 4px 10px rgba(0,0,0,0.8); margin:0;">\${window.escapeHTML(profile.name)}</h1>
+                <h1 style="font-size: 32px; font-weight: 800; text-shadow: 0 4px 10px rgba(0,0,0,0.8); margin:0;">${window.escapeHTML(profile.name)}</h1>
             </div>
         </div>
         <div style="padding: 20px;">
-            <div style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 16px; border-radius: 12px;">\${window.escapeHTML(profile.bio)}</div>
+            <div style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 16px; border-radius: 12px;">${window.escapeHTML(profile.bio)}</div>
             <h2 class="section-title" style="margin-bottom: 16px;">Top Tracks</h2>
-            <div class="vertical-list" id="artist-tracks-list">\${tracksHTML}</div>
+            <div class="vertical-list" id="artist-tracks-list">${tracksHTML}</div>
         </div>
         <div class="bottom-spacer"></div>
-    \`;
+    `;
 
     if (profile.tracks.length > 0) {
         document.querySelectorAll('.artist-track-item').forEach((node, idx) => {
@@ -247,15 +244,15 @@ document.getElementById('fp-queue-btn').addEventListener('click', () => {
         const track = q[i];
         const isPlaying = i === curr;
         const el = document.createElement('div');
-        el.style.cssText = \`display: flex; align-items: center; gap: 14px; padding: 12px; background: \${isPlaying ? 'rgba(30,215,96,0.1)' : 'var(--bg-surface)'}; border-radius: 8px; margin-bottom: 12px; border: \${isPlaying ? '1px solid var(--accent)' : '1px solid transparent'};\`;
-        el.innerHTML = \`
-            <img src="\${track.thumb}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover;">
+        el.style.cssText = `display: flex; align-items: center; gap: 14px; padding: 12px; background: ${isPlaying ? 'rgba(30,215,96,0.1)' : 'var(--bg-surface)'}; border-radius: 8px; margin-bottom: 12px; border: ${isPlaying ? '1px solid var(--accent)' : '1px solid transparent'};`;
+        el.innerHTML = `
+            <img src="${track.thumb}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover;">
             <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 14px; font-weight: 600; color: \${isPlaying ? 'var(--accent)' : 'var(--text-primary)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">\${window.escapeHTML(track.title)}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">\${window.escapeHTML(track.author)}</div>
+                <div style="font-size: 14px; font-weight: 600; color: ${isPlaying ? 'var(--accent)' : 'var(--text-primary)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window.escapeHTML(track.title)}</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">${window.escapeHTML(track.author)}</div>
             </div>
-            \${isPlaying ? '<i class="fa-solid fa-volume-high" style="color: var(--accent);"></i>' : ''}
-        \`;
+            ${isPlaying ? '<i class="fa-solid fa-volume-high" style="color: var(--accent);"></i>' : ''}
+        `;
         fpContent.appendChild(el);
     }
 });
@@ -291,7 +288,7 @@ window.renderHome = () => {
         window.OCTAVE.recentPlayed.forEach(track => {
             const el = document.createElement('div');
             el.className = 'square-card';
-            el.innerHTML = \`<div class="card-art shadow-heavy" style="background-image: url('\${track.thumb}'); background-size: cover;"></div><div class="card-title">\${window.escapeHTML(track.title)}</div>\`;
+            el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
             el.addEventListener('click', () => window.playTrack(track));
             recentGrid.appendChild(el);
         });
@@ -306,7 +303,7 @@ window.renderHome = () => {
             window.OCTAVE.dailyRecs.tracks.forEach(track => {
                 const el = document.createElement('div');
                 el.className = 'square-card';
-                el.innerHTML = \`<div class="card-art shadow-heavy" style="background-image: url('\${track.thumb}'); background-size: cover;"></div><div class="card-title">\${window.escapeHTML(track.title)}</div>\`;
+                el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
                 el.addEventListener('click', () => window.playTrack(track));
                 recsGrid.appendChild(el);
             });
@@ -316,7 +313,7 @@ window.renderHome = () => {
     if (window.fetchDailyRecommendations) window.fetchDailyRecommendations();
 
     const likedCount = Object.keys(window.OCTAVE.liked).length;
-    playlistsDiv.innerHTML = \`
+    playlistsDiv.innerHTML = `
         <div class="list-item" id="open-discover-mix" style="margin-bottom: 8px;">
             <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, #8a2387, #e94057, #f27121); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -332,10 +329,10 @@ window.renderHome = () => {
             </div>
             <div class="list-info">
                 <div class="list-title">Liked Songs</div>
-                <div class="list-subtitle">\${likedCount} tracks saved</div>
+                <div class="list-subtitle">${likedCount} tracks saved</div>
             </div>
         </div>
-    \`;
+    `;
 
     document.getElementById('open-discover-mix').addEventListener('click', () => {
         if (window.generateDiscoverMix) window.generateDiscoverMix();
@@ -345,16 +342,16 @@ window.renderHome = () => {
     Object.keys(window.OCTAVE.playlists).forEach(plName => {
         const el = document.createElement('div');
         el.className = 'list-item';
-        el.innerHTML = \`
+        el.innerHTML = `
             <div class="list-art shadow-heavy" style="background: #2a2d36; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-secondary);">
                 <i class="fa-solid fa-list"></i>
             </div>
             <div class="list-info">
-                <div class="list-title">\${window.escapeHTML(plName)}</div>
-                <div class="list-subtitle">\${window.OCTAVE.playlists[plName].length} tracks</div>
+                <div class="list-title">${window.escapeHTML(plName)}</div>
+                <div class="list-subtitle">${window.OCTAVE.playlists[plName].length} tracks</div>
             </div>
             <button class="icon-btn"><i class="fa-solid fa-chevron-right"></i></button>
-        \`;
+        `;
         el.addEventListener('click', () => window.renderPlaylistDetail(plName));
         playlistsDiv.appendChild(el);
     });
@@ -367,16 +364,16 @@ function renderLibrary() {
     Object.keys(window.OCTAVE.playlists).forEach(plName => {
         const el = document.createElement('div');
         el.className = 'list-item';
-        el.innerHTML = \`
+        el.innerHTML = `
             <div class="list-art shadow-heavy" style="background: #2a2d36; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-secondary);">
                 <i class="fa-solid fa-list"></i>
             </div>
             <div class="list-info">
-                <div class="list-title">\${window.escapeHTML(plName)}</div>
-                <div class="list-subtitle">\${window.OCTAVE.playlists[plName].length} tracks</div>
+                <div class="list-title">${window.escapeHTML(plName)}</div>
+                <div class="list-subtitle">${window.OCTAVE.playlists[plName].length} tracks</div>
             </div>
             <i class="fa-solid fa-chevron-right" style="color: var(--text-secondary);"></i>
-        \`;
+        `;
         el.addEventListener('click', () => window.renderPlaylistDetail(plName));
         lib.appendChild(el);
     });
@@ -385,13 +382,13 @@ function renderLibrary() {
 function buildTrackItem(track) {
     const el = document.createElement('div');
     el.className = 'list-item';
-    el.innerHTML = \`
-        <img src="\${track.thumb}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover;">
+    el.innerHTML = `
+        <img src="${track.thumb}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover;">
         <div class="list-info">
-            <div class="list-title">\${window.escapeHTML(track.title)}</div>
-            <div class="list-subtitle">\${window.escapeHTML(track.author)}</div>
+            <div class="list-title">${window.escapeHTML(track.title)}</div>
+            <div class="list-subtitle">${window.escapeHTML(track.author)}</div>
         </div>
-    \`;
+    `;
     el.addEventListener('click', () => window.playTrack(track));
     return el;
 }
@@ -491,7 +488,7 @@ document.getElementById('opt-add-playlist').addEventListener('click', () => {
         Object.keys(window.OCTAVE.playlists).forEach(plName => {
             const el = document.createElement('div');
             el.className = 'drawer-item';
-            el.innerHTML = \`<i class="fa-solid fa-list"></i> <span>\${window.escapeHTML(plName)}</span>\`;
+            el.innerHTML = `<i class="fa-solid fa-list"></i> <span>${window.escapeHTML(plName)}</span>`;
             el.addEventListener('click', () => {
                 window.OCTAVE.playlists[plName].push(window.OCTAVE.activeTrackForOptions);
                 window.saveCache();
@@ -530,7 +527,7 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         try {
-            const r = await fetch(\`\${base}/api/v1/playlists/\${playlistId}\`, {
+            const r = await fetch(`${base}/api/v1/playlists/${playlistId}`, {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
@@ -540,7 +537,7 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
                     let finalName = data.title || "Imported";
                     let count = 1;
                     while (window.OCTAVE.playlists[finalName]) {
-                        finalName = \`\${data.title} (\${count})\`;
+                        finalName = `${data.title} (${count})`;
                         count++;
                     }
                     window.OCTAVE.playlists[finalName] = data.videos.map(v => ({
@@ -551,7 +548,7 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
                     }));
                     window.saveCache();
                     success = true;
-                    alert(\`Imported \${data.videos.length} tracks!\`);
+                    alert(`Imported ${data.videos.length} tracks!`);
                     document.getElementById('yt-import-modal').classList.remove('active');
                     document.getElementById('yt-playlist-url').value = '';
                     if (document.querySelector('.nav-item.active').getAttribute('data-tab') === 'library') {
@@ -567,6 +564,6 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
     if (!success) {
         alert("Failed. Try again.");
     }
-    btn.innerHTML = 'Add playlist from YouTube';
+    btn.innerHTML = 'Import';
     btn.disabled = false;
 });
