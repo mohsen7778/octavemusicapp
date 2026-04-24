@@ -1,9 +1,10 @@
-// NEW: Global variable to intercept the PWA intall prompt
-let deferredIntallPrompt;
+// NEW: Global variable to intercept the PWA install prompt
+let deferredInstallPrompt;
 
-window.addEventLitener('beforeintallprompt', (e) => {
+window.addEventListener('beforeinstallprompt', (e) => {
     // Prevent the default mini-infobar from appearing on mobile
-    e.preventDsh the event so it can be triggered later.
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
     deferredInstallPrompt = e;
     
     // Only show the custom modal if they haven't dismissed it before
@@ -85,10 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="search-input-wrap" style="position: relative;">
                     <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
-                    <input type="text" id="searchInput" placeholder="Search tracks..." autocomplete="off" style="width: 100%; background: var(--bg-rface); border: 1px solid var(--glass-border); padding: 14px 14px 14px 44px; border-radius: 8px; color: var(--text-primary); font-size: 14px; outline: none;">
+                    <input type="text" id="searchInput" placeholder="Search tracks..." autocomplete="off" style="width: 100%; background: var(--bg-surface); border: 1px solid var(--glass-border); padding: 14px 14px 14px 44px; border-radius: 8px; color: var(--text-primary); font-size: 14px; outline: none;">
                 </div>
             </header>
-            <div id="searcsults" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+            <div id="searchResults" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
                 <div id="search-default-view">
                     <h3 style="font-size: 16px; margin-bottom: 16px;">Recently Searched</h3>
                     <div class="vertical-list" id="search-recent-list" style="padding-right: 0;"></div>
