@@ -1,4 +1,8 @@
-// NEW: Global variable to intercept the PWA install prompt
+// ============================================================
+// app.js — Octave Full Flagship Engine (UNSTRIPPED + AI FIXED)
+// ============================================================
+
+// --- PWA INSTALL LOGIC (FIXED) ---
 let deferredInstallPrompt;
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -63,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- SPLASH SCREEN FADE ---
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         if (splash) {
@@ -139,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindHomeModals();
     window.renderHome();
 
-    // Bind Magic Wand trigger
+    // Bind Magic Wand Trigger
     document.getElementById('open-ai-mix')?.addEventListener('click', () => {
         document.getElementById('ai-mix-modal').classList.add('active');
     });
@@ -161,6 +166,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// --- AI MIX ENGINE (LIMITS REMOVED & SEARCH OPTIMIZED) ---
+async function generateAiMix() {
+    const promptInput = document.getElementById('ai-prompt').value.trim();
+    const lang = document.getElementById('ai-lang').value;
+    if (!promptInput) return;
+
+    const btn = document.getElementById('generate-ai-mix');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Brewing...';
+    btn.disabled = true;
+
+    try {
+        const systemPrompt = `Recommend exactly 20 melodious and high-quality songs based on: "${promptInput}". 
+        Language: ${lang}. Focus on tracks that sound exceptionally good with clear melody.
+        Format strictly: 'Song Title - Artist'. No extra text. One per line.`;
+        
+        const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(systemPrompt)}`);
+        const text = await response.text();
+
+        // Cleans numbering and formatting from AI output
+        const lines = text.split('\n')
+            .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim()) 
+            .filter(l => l.includes(' - '));
+
+        if (lines.length === 0) throw new Error("Format invalid.");
+
+        const playableTracks = [];
+        // Only search for top 15 to ensure stability
+        for (const line of lines.slice(0, 15)) {
+            const [title, artist] = line.split(' - ');
+            const results = await window.performSearch(`${title} ${artist}`);
+            if (results.length > 0) playableTracks.push(results[0]);
+        }
+
+        if (playableTracks.length === 0) throw new Error("Tracks not found.");
+
+        const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        const finalName = `AI Mix: ${promptInput.substring(0, 10)} [${dateStr}]`;
+        
+        window.OCTAVE.playlists[finalName] = playableTracks;
+        window.saveCache();
+
+        document.getElementById('ai-mix-modal').classList.remove('active');
+        document.getElementById('ai-prompt').value = '';
+        window.renderHome();
+        alert(`Successfully generated "${finalName}"!`);
+
+    } catch (e) {
+        alert("AI Error: " + e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+document.getElementById('generate-ai-mix')?.addEventListener('click', generateAiMix);
+
+// --- RESTORED CORE FUNCTIONS ---
 window.openTrackOptions = (track) => {
     window.OCTAVE.activeTrackForOptions = track;
     const infoDiv = document.getElementById('opt-track-info');
@@ -225,6 +287,7 @@ document.getElementById('import-vault-btn').addEventListener('click', () => {
 });
 document.getElementById('import-vault-input').addEventListener('change', window.importVault);
 
+// --- LYRICS & FONTS ---
 const fpPanel = document.getElementById('fp-overlay-panel');
 const fpContent = document.getElementById('fp-overlay-content');
 const fpTitle = document.getElementById('fp-overlay-title');
@@ -262,7 +325,7 @@ document.getElementById('fp-lyrics-btn').addEventListener('click', async () => {
     fpContent.innerHTML = fontHeader + `<div id="lyrics-content">${html}</div>`;
 });
 
-// NEW LISTENER: Share button direct from the full player
+// Share button direct from the full player
 document.getElementById('fp-share-btn')?.addEventListener('click', () => {
     if (window.OCTAVE.currentIndex >= 0) {
         const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
@@ -291,6 +354,7 @@ window.setLyricsFont = (fontCss, el) => {
     }
 };
 
+// --- ARTIST PAGES ---
 window.renderArtistPage = async (artistName) => {
     document.getElementById('full-player').classList.remove('active');
     document.getElementById('fp-overlay-panel').classList.remove('active');
@@ -344,22 +408,19 @@ window.renderArtistPage = async (artistName) => {
     }
 };
 
-document.getElementById('fp-artist').addEventListener('click', () => {
-    if (window.OCTAVE.currentIndex < 0) return;
-    const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-    window.renderArtistPage(track.author);
+document.getElementById('fp-artist')?.addEventListener('click', () => {
+    if (window.OCTAVE.currentIndex >= 0) window.renderArtistPage(window.OCTAVE.queue[window.OCTAVE.currentIndex].author);
 });
 
-document.getElementById('fp-queue-btn').addEventListener('click', () => {
+document.getElementById('fp-queue-btn')?.addEventListener('click', () => {
     if (window.OCTAVE.currentIndex < 0) return;
     fpTitle.innerText = 'Up Next';
     fpContent.innerHTML = '';
     fpPanel.classList.add('active');
     const q = window.OCTAVE.queue;
-    const curr = window.OCTAVE.currentIndex;
-    for (let i = curr; i < q.length; i++) {
+    for (let i = window.OCTAVE.currentIndex; i < q.length; i++) {
         const track = q[i];
-        const isPlaying = i === curr;
+        const isPlaying = i === window.OCTAVE.currentIndex;
         const el = document.createElement('div');
         el.style.cssText = `display: flex; align-items: center; gap: 14px; padding: 12px; background: ${isPlaying ? 'rgba(30,215,96,0.1)' : 'var(--bg-surface)'}; border-radius: 8px; margin-bottom: 12px; border: ${isPlaying ? '1px solid var(--accent)' : '1px solid transparent'};`;
         el.innerHTML = `
@@ -374,12 +435,12 @@ document.getElementById('fp-queue-btn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('opt-sleep-timer').addEventListener('click', () => {
+document.getElementById('opt-sleep-timer')?.addEventListener('click', () => {
     document.getElementById('track-options-modal').classList.remove('active');
     document.getElementById('timer-modal').classList.add('active');
 });
 
-document.getElementById('close-timer').addEventListener('click', () => document.getElementById('timer-modal').classList.remove('active'));
+document.getElementById('close-timer')?.addEventListener('click', () => document.getElementById('timer-modal').classList.remove('active'));
 
 if (document.getElementById('fp-options')) {
     document.getElementById('fp-options').addEventListener('click', () => {
@@ -389,6 +450,7 @@ if (document.getElementById('fp-options')) {
     });
 }
 
+// --- CORE RENDERERS ---
 window.renderPlaylistDetail = (plName) => {
     const dynamicView = document.getElementById('dynamic-view');
     const tracks = window.OCTAVE.playlists[plName] || [];
@@ -445,8 +507,8 @@ window.renderLikedSongs = () => {
         tracks.forEach((track, idx) => {
             html += `
                 <div class="list-item" style="position: relative;">
-                    <img src="${track.thumb}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover;" onclick="window.OCTAVE.queue = Object.values(window.OCTAVE.liked); window.playTrackByIndex(${idx});">
-                    <div class="list-info" style="cursor: pointer;" onclick="window.OCTAVE.queue = Object.values(window.OCTAVE.liked); window.playTrackByIndex(${idx});">
+                    <img src="${track.thumb}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover;" onclick="window.playTrack(track)">
+                    <div class="list-info" style="cursor: pointer;" onclick="window.playTrack(track)">
                         <div class="list-title">${window.escapeHTML(track.title)}</div>
                         <div class="list-subtitle">${window.escapeHTML(track.author)}</div>
                     </div>
@@ -459,11 +521,10 @@ window.renderLikedSongs = () => {
     dynamicView.innerHTML = html;
 };
 
+// --- HOME RENDERER (WITH FLAGSHIP AUTO-DJ) ---
 window.renderHome = () => {
     const hour = new Date().getHours();
-    let greeting = 'Good evening';
-    if (hour >= 5 && hour < 12) greeting = 'Good morning';
-    else if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
+    let greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     if (document.getElementById('time-greeting')) document.getElementById('time-greeting').textContent = greeting;
 
     const recentGrid = document.getElementById('home-recent-grid');
@@ -484,40 +545,27 @@ window.renderHome = () => {
     if (window.fetchTrendingMusic) window.fetchTrendingMusic();
 
     const recsGrid = document.getElementById('home-recs-grid');
-    if (recsGrid) {
-        if (window.OCTAVE.dailyRecs && window.OCTAVE.dailyRecs.tracks.length > 0) {
-            recsGrid.innerHTML = '';
-            window.OCTAVE.dailyRecs.tracks.forEach(track => {
-                const el = document.createElement('div');
-                el.className = 'square-card';
-                el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
-                el.addEventListener('click', () => window.playTrack(track));
-                recsGrid.appendChild(el);
-            });
-        }
+    if (recsGrid && window.OCTAVE.dailyRecs?.tracks.length > 0) {
+        recsGrid.innerHTML = '';
+        window.OCTAVE.dailyRecs.tracks.forEach(track => {
+            const el = document.createElement('div'); el.className = 'square-card';
+            el.innerHTML = `<div class="card-art shadow-heavy" style="background-image: url('${track.thumb}'); background-size: cover;"></div><div class="card-title">${window.escapeHTML(track.title)}</div>`;
+            el.addEventListener('click', () => window.playTrack(track));
+            recsGrid.appendChild(el);
+        });
     }
 
     if (window.fetchDailyRecommendations) window.fetchDailyRecommendations();
 
     const likedCount = Object.keys(window.OCTAVE.liked).length;
     playlistsDiv.innerHTML = `
-        <div class="list-item" id="open-discover-mix" style="margin-bottom: 8px;">
-            <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, #8a2387, #e94057, #f27121); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-            </div>
-            <div class="list-info" style="cursor: pointer;">
-                <div class="list-title">Auto-DJ Discover Mix</div>
-                <div class="list-subtitle">Endless tracks based on taste</div>
-            </div>
+        <div class="list-item" id="open-discover-mix" style="margin-bottom: 8px; cursor: pointer;">
+            <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, #8a2387, #e94057, #f27121); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="list-info"><div class="list-title">Auto-DJ Discover Mix</div><div class="list-subtitle">Endless tracks based on taste</div></div>
         </div>
         <div class="list-item" id="open-liked-songs" style="cursor: pointer;">
-            <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, var(--accent), #0b5c26); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;">
-                <i class="fa-solid fa-heart"></i>
-            </div>
-            <div class="list-info">
-                <div class="list-title">Liked Songs</div>
-                <div class="list-subtitle">${likedCount} tracks saved</div>
-            </div>
+            <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, var(--accent), #0b5c26); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;"><i class="fa-solid fa-heart"></i></div>
+            <div class="list-info"><div class="list-title">Liked Songs</div><div class="list-subtitle">${likedCount} tracks saved</div></div>
         </div>
     `;
 
@@ -527,7 +575,7 @@ window.renderHome = () => {
     
     document.getElementById('open-liked-songs').addEventListener('click', window.renderLikedSongs);
 
-    Object.keys(window.OCTAVE.playlists).forEach(plName => {
+    Object.keys(window.OCTAVE.playlists).reverse().forEach(plName => {
         const el = document.createElement('div');
         el.className = 'list-item';
         el.style.cursor = 'pointer';
@@ -571,98 +619,55 @@ function renderLibrary() {
     });
 }
 
-function buildTrackItem(track) {
-    const el = document.createElement('div');
-    el.className = 'list-item';
-    el.innerHTML = `
-        <img src="${track.thumb}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover;">
-        <div class="list-info">
-            <div class="list-title">${window.escapeHTML(track.title)}</div>
-            <div class="list-subtitle">${window.escapeHTML(track.author)}</div>
-        </div>
-    `;
-    el.addEventListener('click', () => window.playTrack(track));
-    return el;
-}
-
 function bindSearch() {
     const input = document.getElementById('searchInput');
     const resContainer = document.getElementById('searchResults');
-    const recentList = document.getElementById('search-recent-list');
-    if (recentList) {
-        if (window.OCTAVE.recentSearches.length === 0) {
-            recentList.innerHTML = '<div class="empty-state-text">No searches.</div>';
-        } else {
-            recentList.innerHTML = '';
-            window.OCTAVE.recentSearches.forEach(track => recentList.appendChild(buildTrackItem(track)));
-        }
-    }
-
     let timer;
     input.addEventListener('input', (e) => {
         clearTimeout(timer);
         const query = e.target.value.trim();
-        if (!query) {
-            document.getElementById('search-default-view').style.display = 'block';
-            Array.from(resContainer.children).forEach(c => {
-                if (c.id !== 'search-default-view') c.remove();
-            });
-            return;
-        }
-
+        if (!query) { document.getElementById('search-default-view').style.display = 'block'; return; }
         document.getElementById('search-default-view').style.display = 'none';
-        Array.from(resContainer.children).forEach(c => {
-            if (c.id !== 'search-default-view') c.remove();
-        });
-
-        const loader = document.createElement('div');
-        loader.innerHTML = '<div style="text-align:center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px; color:var(--accent);"></i></div>';
-        resContainer.appendChild(loader);
-
         timer = setTimeout(async () => {
             const results = await window.performSearch(query);
-            loader.remove();
-            if (results.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'empty-state-text';
-                empty.innerText = 'No results.';
-                resContainer.appendChild(empty);
-                return;
-            }
-            results.slice(0, 15).forEach(track => resContainer.appendChild(buildTrackItem(track)));
+            resContainer.innerHTML = '';
+            results.slice(0, 15).forEach(track => {
+                const el = document.createElement('div'); el.className = 'list-item';
+                el.innerHTML = `<img src="${track.thumb}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover;"><div class="list-info"><div class="list-title">${window.escapeHTML(track.title)}</div><div class="list-subtitle">${window.escapeHTML(track.author)}</div></div>`;
+                el.addEventListener('click', () => window.playTrack(track));
+                resContainer.appendChild(el);
+            });
         }, 500);
     });
 }
 
 function handleBravePrompt() {
-    if (!localStorage.getItem('bravePromptShown')) setTimeout(() => document.getElementById('brave-modal').classList.add('active'), 1500);
+    if (!localStorage.getItem('bravePromptShown')) setTimeout(() => document.getElementById('brave-modal')?.classList.add('active'), 1500);
     const dismissBrave = () => {
         localStorage.setItem('bravePromptShown', 'true');
-        document.getElementById('brave-modal').classList.remove('active');
+        document.getElementById('brave-modal')?.classList.remove('active');
     };
-    document.getElementById('close-brave').addEventListener('click', dismissBrave);
-    document.getElementById('get-brave').addEventListener('click', dismissBrave);
+    document.getElementById('close-brave')?.addEventListener('click', dismissBrave);
+    document.getElementById('get-brave')?.addEventListener('click', dismissBrave);
 }
 
 function bindHomeModals() {
-    const openPl = document.getElementById('open-create-playlist');
-    const plModal = document.getElementById('playlist-modal');
-    if (openPl) openPl.addEventListener('click', () => plModal.classList.add('active'));
-    document.getElementById('close-playlist').addEventListener('click', () => plModal.classList.remove('active'));
+    document.getElementById('open-create-playlist')?.addEventListener('click', () => document.getElementById('playlist-modal').classList.add('active'));
+    document.getElementById('close-playlist')?.addEventListener('click', () => document.getElementById('playlist-modal').classList.remove('active'));
 
-    document.getElementById('save-playlist').addEventListener('click', () => {
+    document.getElementById('save-playlist')?.addEventListener('click', () => {
         const name = document.getElementById('playlist-name').value.trim();
         if (name !== '' && !window.OCTAVE.playlists[name]) {
             window.OCTAVE.playlists[name] = [];
             window.saveCache();
             document.getElementById('playlist-name').value = '';
-            plModal.classList.remove('active');
+            document.getElementById('playlist-modal').classList.remove('active');
             window.renderHome();
         }
     });
 }
 
-document.getElementById('opt-share-track').addEventListener('click', () => {
+document.getElementById('opt-share-track')?.addEventListener('click', () => {
     if (window.OCTAVE.activeTrackForOptions) {
         const track = window.OCTAVE.activeTrackForOptions;
         const url = new URL(window.location.origin + window.location.pathname);
@@ -680,14 +685,14 @@ document.getElementById('opt-share-track').addEventListener('click', () => {
     }
 });
 
-document.getElementById('opt-like-track').addEventListener('click', () => {
+document.getElementById('opt-like-track')?.addEventListener('click', () => {
     if (window.OCTAVE.activeTrackForOptions) {
         window.toggleLike(window.OCTAVE.activeTrackForOptions);
         document.getElementById('track-options-modal').classList.remove('active');
     }
 });
 
-document.getElementById('opt-add-playlist').addEventListener('click', () => {
+document.getElementById('opt-add-playlist')?.addEventListener('click', () => {
     document.getElementById('track-options-modal').classList.remove('active');
     const plModal = document.getElementById('select-playlist-modal');
     const list = document.getElementById('playlist-selection-list');
@@ -711,6 +716,7 @@ document.getElementById('opt-add-playlist').addEventListener('click', () => {
     plModal.classList.add('active');
 });
 
+// --- YOUTUBE IMPORT ---
 document.getElementById('start-yt-import')?.addEventListener('click', async () => {
     const urlInput = document.getElementById('yt-playlist-url').value.trim();
     if (!urlInput) return;
@@ -761,9 +767,7 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
                     alert(`Imported ${data.videos.length} tracks!`);
                     document.getElementById('yt-import-modal').classList.remove('active');
                     document.getElementById('yt-playlist-url').value = '';
-                    if (document.querySelector('.nav-item.active').getAttribute('data-tab') === 'library') {
-                        renderLibrary();
-                    }
+                    window.renderHome();
                     break;
                 }
             }
@@ -771,81 +775,7 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
             continue;
         }
     }
-    if (!success) {
-        alert("Failed. Try again.");
-    }
+    if (!success) alert("Failed.");
     btn.innerHTML = 'Import';
     btn.disabled = false;
 });
-
-// --- AI MIX ENGINE ---
-async function generateAiMix() {
-    const promptInput = document.getElementById('ai-prompt').value.trim();
-    const lang = document.getElementById('ai-lang').value;
-    const today = new Date().toDateString();
-    
-    if (!promptInput) return;
-
-    // 1. Rate Limiting Check (3 gens/day)
-    let history = JSON.parse(localStorage.getItem('octave_ai_limit') || '{"date":"","count":0}');
-    if (history.date === today && history.count >= 3) {
-        alert("Daily limit reached (3/3). Come back tomorrow.");
-        return;
-    }
-
-    // 2. Official Loading State
-    const btn = document.getElementById('generate-ai-mix');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
-    btn.disabled = true;
-
-    try {
-        // 3. Hidden Melodic/Quality Prompt
-        const systemPrompt = `Create a list of 20 high-quality, melodious songs for: ${promptInput}. Language: ${lang}. 
-        Criteria: Focus on tracks that sound good to the ears with excellent production and high melodic content. 
-        Format strictly: 'Song Title - Artist'. No numbering, no extra text.`;
-        
-        const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(systemPrompt)}`);
-        const text = await response.text();
-
-        // 4. Processing tracks
-        const lines = text.split('\n').filter(l => l.includes(' - ')).slice(0, 20);
-        const playableTracks = [];
-        
-        for (const line of lines) {
-            const [title, artist] = line.split(' - ');
-            // Call performSearch from player.js to get real VideoIDs
-            const results = await window.performSearch(`${title} ${artist}`);
-            if (results.length > 0) {
-                playableTracks.push(results[0]);
-            }
-        }
-
-        // 5. Save as Persistent Playlist with Date
-        const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-        const finalName = `AI: ${promptInput.substring(0, 12)} (${dateStr})`;
-        
-        window.OCTAVE.playlists[finalName] = playableTracks;
-        window.saveCache();
-        
-        // 6. Update Limits
-        if (history.date !== today) {
-            history = { date: today, count: 1 };
-        } else {
-            history.count++;
-        }
-        localStorage.setItem('octave_ai_limit', JSON.stringify(history));
-        
-        document.getElementById('ai-mix-modal').classList.remove('active');
-        document.getElementById('ai-prompt').value = '';
-        window.renderHome(); // Refresh UI to show new mix
-    } catch (e) {
-        alert("AI generation failed. Check your network.");
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-// Bindings for AI Mix Generator
-document.getElementById('generate-ai-mix')?.addEventListener('click', generateAiMix);
