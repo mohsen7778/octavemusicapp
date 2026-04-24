@@ -921,3 +921,18 @@ body {
 #fp-overlay-content::-webkit-scrollbar {
     display: none;
 }
+/* --- FULL PLAYER 1:1 ALBUM ART FIX --- */
+.fp-art-container {
+    aspect-ratio: 1 / 1 !important; /* Forces the container to always be a perfect square */
+    width: 100%; /* Adapts to your current padding/margins */
+    max-width: 400px; /* Prevents it from getting too huge on tablets */
+    margin: 0 auto; /* Centers it */
+    overflow: hidden;
+}
+
+#fp-art {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important; /* This is the magic word! It crops the rectangle into a perfect square without stretching */
+    object-position: center !important; /* Ensures the subject of the thumbnail stays in the middle */
+}
