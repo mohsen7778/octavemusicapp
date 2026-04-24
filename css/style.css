@@ -921,15 +921,29 @@ body {
 #fp-overlay-content::-webkit-scrollbar {
     display: none;
 }
-/* --- FULL PLAYER 1:1 ALBUM ART (SPOTIFY PREMIUM FIX) --- */
+/* --- SPOTIFY-GRADE UI FIX: DYNAMIC VIEWPORT & PERFECT 1:1 ART --- */
+
+/* 1. Force the player to respect the mobile browser's bottom UI bar */
+#full-player {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100dvh !important; /* 'dvh' dynamically resizes when the browser address/nav bar appears! */
+    display: flex !important;
+    flex-direction: column !important;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important; /* Safe area for swipe gestures */
+    box-sizing: border-box !important;
+    overflow-y: auto !important; /* Allows scrolling only if on a tiny landscape screen */
+}
+
+/* 2. Make the album art responsive to HEIGHT so it NEVER pushes controls off screen */
 .fp-art-container {
     position: relative !important;
-    width: calc(100vw - 64px) !important; /* Perfectly calculates screen width minus padding */
-    max-width: 360px !important; /* Stops it from getting too big on tablets */
-    aspect-ratio: 1 / 1 !important; /* Rock solid square */
-    margin: 4vh auto 3vh auto !important; /* Responsive breathing room */
-    flex-shrink: 0 !important; /* Strictly forbids the browser from squishing the container */
-    min-height: 0 !important;
+    width: calc(100vw - 48px) !important;
+    max-width: 45vh !important; /* The magic trick: max size is tied to screen height */
+    aspect-ratio: 1 / 1 !important; /* Keeps it perfectly square */
+    margin: auto !important; /* Pushes the header UP and controls DOWN, centering the art perfectly */
+    flex-shrink: 0 !important;
 }
 
 #fp-art {
@@ -938,8 +952,18 @@ body {
     left: 0 !important;
     width: 100% !important;
     height: 100% !important;
-    object-fit: cover !important; /* Flawlessly crops the 16:9 YouTube thumbnail into the 1:1 square */
+    object-fit: cover !important; /* Crops cleanly without stretching */
     object-position: center !important;
-    border-radius: 12px !important; /* Smooth, modern Apple/Spotify rounded corners */
+    border-radius: 12px !important;
     display: block !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4) !important; /* Premium floating shadow */
+}
+
+/* 3. Protect the bottom controls from being squished */
+.fp-header,
+.fp-info-row, 
+.fp-actions-grid, 
+.fp-progress-section, 
+.fp-controls {
+    flex-shrink: 0 !important; /* Strictly forbids the browser from crushing the buttons */
 }
