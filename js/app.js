@@ -1,5 +1,5 @@
 // ============================================================
-// app.js — Octave Full Flagship Engine (UNSTRIPPED + AI TASTE MATCHING)
+// app.js — Octave Full Flagship Engine (UNSTRIPPED + AI TASTE MATCHING FIXED)
 // ============================================================
 
 // --- PWA INSTALL LOGIC ---
@@ -166,9 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// --- GLOBAL EVENT DELEGATION (FIXES "BUTTON WORKS ONCE" BUG) ---
+// --- GLOBAL EVENT DELEGATION ---
 document.body.addEventListener('click', async (e) => {
-    // Top-right Menu
     if (e.target.closest('#menu-btn')) {
         document.getElementById('side-menu').classList.add('active');
         document.getElementById('menu-backdrop').classList.add('active');
@@ -178,7 +177,6 @@ document.body.addEventListener('click', async (e) => {
         document.getElementById('menu-backdrop').classList.remove('active');
     }
     
-    // Dynamic Modals Triggers
     if (e.target.closest('#open-yt-import')) {
         document.getElementById('yt-import-modal').classList.add('active');
     }
@@ -186,12 +184,10 @@ document.body.addEventListener('click', async (e) => {
         document.getElementById('playlist-modal').classList.add('active');
     }
     
-    // Catches BOTH the small and large AI buttons!
     if (e.target.closest('#open-ai-mix') || e.target.closest('#open-ai-mix-large')) {
         document.getElementById('ai-mix-modal').classList.add('active');
     }
 
-    // Static Pages loading
     const pageBtn = e.target.closest('[data-page]');
     if (pageBtn) {
         document.getElementById('side-menu').classList.remove('active');
@@ -219,7 +215,7 @@ document.body.addEventListener('click', async (e) => {
 });
 
 
-// --- AI MIX ENGINE (WITH DEEP CONTEXT TASTE MATCHING) ---
+// --- AI MIX ENGINE (WITH STRICT FIREWALL & MUSIC ENFORCEMENT) ---
 async function generateAiMix() {
     const promptInput = document.getElementById('ai-prompt').value.trim();
     const lang = document.getElementById('ai-lang').value;
@@ -231,32 +227,36 @@ async function generateAiMix() {
     btn.disabled = true;
 
     try {
-        // --- CALCULATION: FIND USER'S TOP 5 SONGS ---
         let tasteContext = "";
         if (window.OCTAVE && typeof window.calculateTrackScore === 'function') {
             const allKnown =[...Object.values(window.OCTAVE.liked || {}), ...(window.OCTAVE.recentPlayed || [])];
-            
-            // Deduplicate by VideoID so we don't pass the same song multiple times
             const uniqueTracks = Array.from(new Map(allKnown.map(t => [t.videoId, t])).values());
-            
-            // Sort by algorithm score and extract the top 5
             const topScored = uniqueTracks.sort((a, b) => window.calculateTrackScore(b) - window.calculateTrackScore(a)).slice(0, 5);
             
             if (topScored.length > 0) {
-                const trackNames = topScored.map(t => `${t.title} by ${t.author}`).join(", ");
-                tasteContext = `\nFor context to guide your music selection, the user's top 5 favorite tracks right now are: ${trackNames}. Keep their musical taste and preferred genres in mind, but make sure the 15 songs primarily fit the requested vibe.\n`;
+                // Strip all special chars, limit length, prevent HTML injection from weird history
+                const cleanNames = topScored.map(t => `${t.title.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 30)} by ${t.author.replace(/[^a-zA-Z0-9 ]/g, '')}`).join(", ");
+                tasteContext = `\nContext: The user recently played: [${cleanNames}]. If these are actual songs, use them to gauge their taste. IF THEY ARE TUTORIALS, NEWS, PODCASTS, OR YOUTUBE VIDEOS, COMPLETELY IGNORE THEM.\n`;
             }
         }
 
-        // Strict prompt with User Context injected
-        const systemPrompt = `You are an elite music curator.\nRecommend exactly 15 highly melodic songs based on the vibe: "${promptInput}".\nLanguage: ${lang}.${tasteContext}\nFormat exactly as: Song Title - Artist Name\nDo NOT include numbers, bullet points, quotes, or any other text. Just the song and artist separated by a hyphen.`;
+        // Extremely strict firewall prompt
+        const systemPrompt = `You are an elite music curator API. 
+Task: Recommend exactly 15 highly melodic MUSIC TRACKS based on the vibe: "${promptInput}". 
+Language: ${lang}. ${tasteContext}
+
+CRITICAL RULES:
+1. Output strictly in this format: Song Title - Artist Name
+2. Recommend ONLY actual music tracks (songs). NEVER recommend tutorials, news, podcasts, HTML coding, or conversational videos.
+3. Do NOT include numbers, quotes, bullet points, HTML tags, or any other text.`;
         
         const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(systemPrompt)}`);
         const text = await response.text();
 
+        // Firewall the parsing: Strip HTML tags, weird characters, and ignore obviously non-music lines
         const lines = text.split('\n')
-            .map(l => l.replace(/^[\d\.\)\-*]+\s*/, '').replace(/["'*_]/g, '').trim()) 
-            .filter(l => l.match(/[-–—]/));
+            .map(l => l.replace(/^[\d\.\)\-*]+\s*/, '').replace(/["'*_<>]/g, '').trim()) 
+            .filter(l => l.match(/[-–—]/) && l.length < 80 && !l.toLowerCase().includes('tutorial') && !l.toLowerCase().includes('html'));
 
         if (lines.length === 0) throw new Error("Format invalid. Please try a different prompt.");
 
@@ -270,13 +270,14 @@ async function generateAiMix() {
             const artist = parts[1].trim();
             if(!title || !artist) continue;
 
-            const results = await window.performSearch(`${title} ${artist} audio`);
+            // Forced "song audio" appended to search to guarantee we don't fetch vlogs
+            const results = await window.performSearch(`${title} ${artist} song audio`);
             if (results && results.length > 0) {
                 playableTracks.push(results[0]);
             }
         }
 
-        if (playableTracks.length === 0) throw new Error("Tracks not found. API network may be overloaded.");
+        if (playableTracks.length === 0) throw new Error("Tracks not found. Try a different vibe.");
 
         const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
         const finalName = `AI Mix: ${promptInput.substring(0, 10)} [${dateStr}]`;
@@ -560,7 +561,6 @@ window.renderLikedSongs = () => {
     dynamicView.innerHTML = html;
 };
 
-// --- UPDATED RENDER HOME (Added Large AI Mix Button) ---
 window.renderHome = () => {
     const hour = new Date().getHours();
     let greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -598,7 +598,6 @@ window.renderHome = () => {
 
     const likedCount = Object.keys(window.OCTAVE.liked).length;
     
-    // Inject the Large AI Button here
     playlistsDiv.innerHTML = `
         <div class="list-item" id="open-discover-mix" style="margin-bottom: 8px; cursor: pointer;">
             <div class="list-art shadow-heavy" style="background: linear-gradient(135deg, #8a2387, #e94057, #f27121); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
@@ -736,7 +735,6 @@ function handleBravePrompt() {
     document.getElementById('close-brave')?.addEventListener('click', dismissBrave);
     document.getElementById('get-brave')?.addEventListener('click', dismissBrave);
 }
-
 
 document.getElementById('opt-share-track')?.addEventListener('click', () => {
     if (window.OCTAVE.activeTrackForOptions) {
