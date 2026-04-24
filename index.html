@@ -66,7 +66,10 @@
             <section class="content-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; padding-right: 20px; margin-bottom: 16px;">
                     <h2 class="section-title" style="margin-bottom: 0;">Your Heavy Duty Mixes</h2>
-                    <button class="icon-btn" id="open-create-playlist"><i class="fa-solid fa-plus"></i></button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="icon-btn" id="open-ai-mix" style="color: var(--accent);"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+                        <button class="icon-btn" id="open-create-playlist"><i class="fa-solid fa-plus"></i></button>
+                    </div>
                 </div>
                 <div class="vertical-list" id="home-playlists"></div>
             </section>
@@ -238,6 +241,24 @@
                 <div class="modal-actions" style="margin-top: 24px;">
                     <button class="btn-secondary" id="close-yt-import">Cancel</button>
                     <button class="btn-primary" id="start-yt-import" style="color: var(--bg-deep);"><i class="fa-brands fa-youtube" style="margin-right: 6px;"></i> Import</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="ai-mix-modal">
+            <div class="modal-content glass-panel shadow-heavy">
+                <h3 style="margin-bottom: 16px;">AI Mix Generator</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">Describe your vibe (max 20 tracks).</p>
+                <input type="text" id="ai-prompt" class="modern-input" placeholder="e.g., Melodic Deep House for study" style="margin-bottom: 12px;">
+                <select id="ai-lang" class="modern-input" style="margin-bottom: 24px; appearance: none;">
+                    <option value="English">English</option>
+                    <option value="Hindi/Punjabi">Hindi/Punjabi</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="Korean">Korean</option>
+                </select>
+                <div class="modal-actions">
+                    <button class="btn-secondary" id="close-ai-mix">Cancel</button>
+                    <button class="btn-primary" id="generate-ai-mix" style="color: var(--bg-deep);">Generate Mix</button>
                 </div>
             </div>
         </div>
