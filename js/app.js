@@ -771,18 +771,12 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
     btn.disabled = false;
 });
 
-
-// Mobile Test Puter AI Connection
-async function testPuterAI() {
-    alert("Asking AI for a heavy duty mix... Click OK and wait a few seconds.");
+// Delayed Mobile Puter AI Test
+setTimeout(async () => {
     try {
-        const response = await puter.ai.chat("Give me exactly 3 heavy workout songs. Format as 'Song Name - Artist'. Do not write any other text.");
-        // This will pop the answer up on your screen
+        const response = await puter.ai.chat("Give me exactly 3 heavy workout songs. Format as 'Song Name - Artist'.");
         alert("AI Response:\n" + response);
     } catch (error) {
         alert("Puter AI failed to connect: " + error);
     }
-}
-
-// Run the test when the file loads
-testPuterAI();
+}, 4000); // Waits 4 seconds for your app to fully load first
