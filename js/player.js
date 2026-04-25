@@ -1,6 +1,6 @@
 // ============================================================
 // player.js — Octave Hybrid Audio Engine
-// Fixed: Direct Google CDN Fetching for Chrome / IFrame for Brave
+// Fixed: Synchronous Native Playback (Chrome Autoplay Bypass)
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -42,7 +42,7 @@ if (navigator.brave && navigator.brave.isBrave) {
         }
     });
 } else {
-    console.log("Octave: Chrome/Safari detected. Using Native Direct-CDN Engine.");
+    console.log("Octave: Chrome/Safari detected. Using Native Proxy Engine.");
 }
 
 window.initTrackStats = (videoId) => {
@@ -170,53 +170,33 @@ function unlockAudioForSafari() {
 document.addEventListener('click', unlockAudioForSafari, { once: true });
 document.addEventListener('touchstart', unlockAudioForSafari, { once: true });
 
-// Chrome Fix: Fetch the direct Google Video stream URL to bypass proxy blocking
-async function fetchDirectStreamUrl(videoId) {
-    for (let i = 0; i < window.INVIDIOUS.length; i++) {
-        const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
-        try {
-            const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
-            if (!res.ok) continue;
-            const data = await res.json();
-            
-            // Extract the direct Google CDN URL for standard m4a audio
-            const audioStream = data.adaptiveFormats.find(f => f.itag === '140' || f.itag === 140);
-            if (audioStream && audioStream.url) {
-                window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length; 
-                return audioStream.url;
-            }
-        } catch (e) {
-            continue;
-        }
-    }
-    // Absolute fallback
-    return `${window.INVIDIOUS[window.invIdx]}/latest_version?id=${videoId}&itag=140&local=true`;
+// Chrome Fix: Synchronous assignment to bypass Chrome Autoplay blockers
+function getStreamUrl(videoId) {
+    const base = window.INVIDIOUS[window.invIdx];
+    return `${base}/latest_version?id=${videoId}&itag=140&local=true`;
 }
 
-async function preloadNextTrackInQueue() {
+function preloadNextTrackInQueue() {
     if (window.AUDIO_ENGINE !== 'native' || window.OCTAVE.currentIndex < 0) return;
     const nextIdx = window.OCTAVE.currentIndex + 1;
     if (nextIdx < window.OCTAVE.queue.length) {
         const nextId = window.OCTAVE.queue[nextIdx].videoId;
-        const url = await fetchDirectStreamUrl(nextId);
-        if (url) {
-            PRELOAD_AUDIO.src = url;
-            preloadedVideoId = nextId;
-            PRELOAD_AUDIO.load(); 
-        }
+        PRELOAD_AUDIO.src = getStreamUrl(nextId);
+        preloadedVideoId = nextId;
+        PRELOAD_AUDIO.load(); 
     }
 }
 
-const tryNextStream = async (videoId) => {
+const tryNextStream = (videoId) => {
+    // 100% Synchronous - no 'await' used, which keeps the user gesture alive for Chrome!
     if (preloadedVideoId === videoId && PRELOAD_AUDIO.src) {
         AUDIO.src = PRELOAD_AUDIO.src;
     } else {
-        const url = await fetchDirectStreamUrl(videoId);
-        if (url) AUDIO.src = url;
+        AUDIO.src = getStreamUrl(videoId);
     }
     
     AUDIO.load();
-    AUDIO.play().catch(() => {});
+    AUDIO.play().catch((e) => { console.warn("Chrome Autoplay blocked or network error", e) });
 };
 
 AUDIO.addEventListener('playing', () => {
@@ -240,19 +220,17 @@ AUDIO.addEventListener('ended', () => {
     handleTrackEnded();
 });
 
-AUDIO.addEventListener('error', async () => {
+AUDIO.addEventListener('error', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
-    // If the Google CDN link expires mid-play, fetch a brand new one and resume
+    // If the server fails to load the stream, immediately rotate and try again natively
+    window.invIdx = (window.invIdx + 1) % window.INVIDIOUS.length;
     if (window.OCTAVE.currentIndex >= 0) {
         const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
         const currentPos = AUDIO.currentTime || 0;
-        const newUrl = await fetchDirectStreamUrl(track.videoId);
-        if (newUrl) {
-            AUDIO.src = newUrl;
-            AUDIO.currentTime = currentPos;
-            AUDIO.load();
-            AUDIO.play().catch(() => {});
-        }
+        AUDIO.src = getStreamUrl(track.videoId);
+        AUDIO.currentTime = currentPos;
+        AUDIO.load();
+        AUDIO.play().catch(() => {});
     }
 });
 
@@ -900,12 +878,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMediaSession(track); 
         
         if (window.AUDIO_ENGINE === 'native') {
-            fetchDirectStreamUrl(track.videoId).then(url => {
-                if (url) {
-                    AUDIO.src = url;
-                    AUDIO.load();
-                }
-            });
+            AUDIO.src = getStreamUrl(track.videoId);
+            AUDIO.load();
         }
     }
 
