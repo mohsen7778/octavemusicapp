@@ -1,6 +1,6 @@
 // ============================================================
 // player.js — Octave Hybrid Audio Engine
-// Brave stays on IFrame. Chrome/Safari on Ultra-Stable Native.
+// Chrome Native Engine Fixed (302 Redirects) | Brave IFrame Engine (Untouched)
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -32,7 +32,7 @@ window.OCTAVE = {
 };
 
 // ─── HYBRID ENGINE ROUTER ──────────────────────────────────────────────────
-window.AUDIO_ENGINE = 'native'; // Default to proxy for Chrome/Safari
+window.AUDIO_ENGINE = 'native'; // Default to native for Chrome/Safari
 
 if (navigator.brave && navigator.brave.isBrave) {
     navigator.brave.isBrave().then(isBrave => {
@@ -42,7 +42,7 @@ if (navigator.brave && navigator.brave.isBrave) {
         }
     });
 } else {
-    console.log("Octave: Chrome/Safari detected. Using Native Proxy Engine.");
+    console.log("Octave: Chrome/Safari detected. Using Native Engine.");
 }
 
 window.initTrackStats = (videoId) => {
@@ -133,13 +133,6 @@ window.INVIDIOUS =[
     'https://invidious.lunar.icu'
 ];
 
-window.PIPED_INSTANCES = [
-    'https://pipedapi.kavin.rocks',
-    'https://pipedapi.tokhmi.xyz',
-    'https://api.piped.projectsegfau.lt',
-    'https://piped-api.lunar.icu'
-];
-
 fetch('https://api.invidious.io/instances.json?sort_by=health')
     .then(res => res.json())
     .then(data => {
@@ -151,7 +144,6 @@ fetch('https://api.invidious.io/instances.json?sort_by=health')
     .catch(() => console.warn('Using fallback instances'));
 
 window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
-window.pipedIdx = Math.floor(Math.random() * window.PIPED_INSTANCES.length);
 
 // ─── BLAZING FAST NATIVE ENGINE (CHROME/SAFARI) ──────────────────────────────────────
 const AUDIO = new Audio();
@@ -166,7 +158,6 @@ function unlockAudioEngine() {
     if (audioUnlocked) return;
     audioUnlocked = true;
     
-    // Unlocks Chrome Autoplay by firing a silent play immediately
     AUDIO.play().then(() => { AUDIO.pause(); }).catch(() => {});
     
     try {
@@ -182,80 +173,31 @@ function unlockAudioEngine() {
 document.addEventListener('click', unlockAudioEngine, { once: true });
 document.addEventListener('touchstart', unlockAudioEngine, { once: true });
 
-// Chrome: Fetch Direct Stream URL from Piped & Invidious
-async function fetchDirectStreamUrl(videoId) {
-    // 1. Race Piped API (Most reliable for direct Google CDN)
-    for (let i = 0; i < window.PIPED_INSTANCES.length; i++) {
-        const base = window.PIPED_INSTANCES[(window.pipedIdx + i) % window.PIPED_INSTANCES.length];
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
-            const res = await fetch(`${base}/streams/${videoId}`, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            
-            if (res.ok) {
-                const data = await res.json();
-                const audioStream = data.audioStreams.find(s => s.itag === 140 || s.itag === '140') || data.audioStreams[0];
-                if (audioStream && audioStream.url) {
-                    window.pipedIdx = (window.pipedIdx + i) % window.PIPED_INSTANCES.length;
-                    return audioStream.url;
-                }
-            }
-        } catch (e) { continue; }
-    }
-
-    // 2. Fallback to Invidious API
-    for (let i = 0; i < window.INVIDIOUS.length; i++) {
-        const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
-            const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            
-            if (res.ok) {
-                const data = await res.json();
-                const audioStream = data.adaptiveFormats?.find(f => f.itag === '140' || f.itag === 140);
-                if (audioStream && audioStream.url) {
-                    window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length; 
-                    return audioStream.url;
-                }
-            }
-        } catch (e) { continue; }
-    }
-
-    return null; // Return null to trigger the 3-strike skip logic
+// CHROME FIX: Dropped &local=true. This forces Invidious to issue a native 302 Redirect 
+// straight to Google Video servers. Browsers handle this natively with no CORS block!
+function getStreamUrl(videoId) {
+    const base = window.INVIDIOUS[window.invIdx];
+    return `${base}/latest_version?id=${videoId}&itag=140`;
 }
 
-async function preloadNextTrackInQueue() {
+function preloadNextTrackInQueue() {
     if (window.AUDIO_ENGINE !== 'native' || window.OCTAVE.currentIndex < 0) return;
     const nextIdx = window.OCTAVE.currentIndex + 1;
     if (nextIdx < window.OCTAVE.queue.length) {
         const nextId = window.OCTAVE.queue[nextIdx].videoId;
-        const url = await fetchDirectStreamUrl(nextId);
-        if (url) {
-            PRELOAD_AUDIO.src = url;
-            preloadedVideoId = nextId;
-            PRELOAD_AUDIO.load(); 
-        }
+        PRELOAD_AUDIO.src = getStreamUrl(nextId);
+        preloadedVideoId = nextId;
+        PRELOAD_AUDIO.load(); 
     }
 }
 
-const tryNextStream = async (videoId) => {
-    // Show spinner immediately so Chrome users know it's actually fetching
-    updatePlayIcons('fa-solid fa-spinner fa-spin');
+const tryNextStream = (videoId) => {
+    updatePlayIcons('fa-solid fa-spinner fa-spin'); // Keeps the spinner UI so you know it's working
     
     if (preloadedVideoId === videoId && PRELOAD_AUDIO.src) {
         AUDIO.src = PRELOAD_AUDIO.src;
     } else {
-        const url = await fetchDirectStreamUrl(videoId);
-        if (url) {
-            AUDIO.src = url;
-        } else {
-            console.warn("Track completely unavailable across all APIs. Skipping...");
-            window.playNextLogic();
-            return;
-        }
+        AUDIO.src = getStreamUrl(videoId);
     }
     
     AUDIO.load();
@@ -265,39 +207,8 @@ const tryNextStream = async (videoId) => {
     });
 };
 
-let chromeErrorCount = 0;
-AUDIO.addEventListener('error', async () => {
-    if (window.AUDIO_ENGINE !== 'native') return;
-    chromeErrorCount++;
-    
-    // The 3-Strike Rule: Prevents the infinite freeze loop
-    if (chromeErrorCount >= 3) {
-        console.warn("Audio stream failed 3 times. Skipping track automatically.");
-        chromeErrorCount = 0;
-        window.playNextLogic();
-        return;
-    }
-
-    if (window.OCTAVE.currentIndex >= 0) {
-        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-        const currentPos = AUDIO.currentTime || 0;
-        const newUrl = await fetchDirectStreamUrl(track.videoId);
-        
-        if (newUrl) {
-            AUDIO.src = newUrl;
-            AUDIO.currentTime = currentPos;
-            AUDIO.load();
-            AUDIO.play().catch(() => {});
-        } else {
-            chromeErrorCount = 0;
-            window.playNextLogic();
-        }
-    }
-});
-
 AUDIO.addEventListener('playing', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
-    chromeErrorCount = 0; // Reset strikes on success
     window.OCTAVE.isPlaying = true;
     updatePlayIcons('fa-solid fa-pause');
     startProgressTracking();
@@ -308,7 +219,6 @@ AUDIO.addEventListener('playing', () => {
 AUDIO.addEventListener('pause', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
     window.OCTAVE.isPlaying = false;
-    // Don't override the spinner if it's currently fetching
     const fpIcon = document.querySelector('#fp-play i');
     if (fpIcon && !fpIcon.classList.contains('fa-spinner')) {
         updatePlayIcons('fa-solid fa-play');
@@ -320,6 +230,23 @@ AUDIO.addEventListener('ended', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
     handleTrackEnded();
 });
+
+// REMOVED SKIP LOGIC: If a server fails, it just instantly rotates and tries the next one.
+AUDIO.addEventListener('error', () => {
+    if (window.AUDIO_ENGINE !== 'native') return;
+    
+    window.invIdx = (window.invIdx + 1) % window.INVIDIOUS.length;
+    
+    if (window.OCTAVE.currentIndex >= 0) {
+        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
+        const currentPos = AUDIO.currentTime || 0;
+        AUDIO.src = getStreamUrl(track.videoId);
+        AUDIO.currentTime = currentPos;
+        AUDIO.load();
+        AUDIO.play().catch(() => {});
+    }
+});
+
 
 // ─── IFRAME ENGINE SETUP (BRAVE - 100% UNTOUCHED) ─────────────────────────────
 let YTP = null;
@@ -385,7 +312,6 @@ function handleTrackEnded() {
     if (window.playNextLogic) window.playNextLogic();
 }
 
-// Fixed PlayNextLogic so both browsers progress properly
 window.playNextLogic = () => {
     if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.currentIndex < window.OCTAVE.queue.length - 1) {
         window.playTrackByIndex(window.OCTAVE.currentIndex + 1);
@@ -963,12 +889,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMediaSession(track); 
         
         if (window.AUDIO_ENGINE === 'native') {
-            fetchDirectStreamUrl(track.videoId).then(url => {
-                if (url) {
-                    AUDIO.src = url;
-                    AUDIO.load();
-                }
-            });
+            AUDIO.src = getStreamUrl(track.videoId);
+            AUDIO.load();
         }
     }
 
