@@ -1,6 +1,7 @@
 // ============================================================
 // player.js — Octave Hybrid Audio Engine
-// Fixed: Synchronous Native Playback (Chrome Autoplay Bypass)
+// Detects Brave Browser for instant IFrame playback.
+// Falls back to Blazing Fast Native <audio> Engine for Chrome/Safari.
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -32,7 +33,7 @@ window.OCTAVE = {
 };
 
 // ─── HYBRID ENGINE ROUTER ──────────────────────────────────────────────────
-window.AUDIO_ENGINE = 'native'; // Default to Native `<audio>` for Chrome/Safari
+window.AUDIO_ENGINE = 'native'; // Default to proxy for Chrome/Safari
 
 if (navigator.brave && navigator.brave.isBrave) {
     navigator.brave.isBrave().then(isBrave => {
@@ -149,9 +150,8 @@ window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
 const AUDIO = new Audio();
 AUDIO.preload = 'auto';
 
-const PRELOAD_AUDIO = new Audio(); 
+const PRELOAD_AUDIO = new Audio(); // Ghost audio element to secretly buffer the next song
 PRELOAD_AUDIO.preload = 'auto';
-let preloadedVideoId = null;
 
 let audioUnlocked = false;
 function unlockAudioForSafari() {
@@ -170,33 +170,74 @@ function unlockAudioForSafari() {
 document.addEventListener('click', unlockAudioForSafari, { once: true });
 document.addEventListener('touchstart', unlockAudioForSafari, { once: true });
 
-// Chrome Fix: Synchronous assignment to bypass Chrome Autoplay blockers
-function getStreamUrl(videoId) {
-    const base = window.INVIDIOUS[window.invIdx];
-    return `${base}/latest_version?id=${videoId}&itag=140&local=true`;
+// 1. DIRECT CDN FETCHER: Uses Piped API for direct Google audio streams
+async function getFastestStreamUrl(videoId) {
+    try {
+        // Try Piped API first (Modern, extremely stable)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (res.ok) {
+            const data = await res.json();
+            const audioStream = data.audioStreams.find(s => s.itag === 140) || data.audioStreams[0];
+            if (audioStream && audioStream.url) {
+                return audioStream.url;
+            }
+        }
+    } catch (e) {}
+
+    // Fallback to direct Invidious API
+    for (let i = 0; i < window.INVIDIOUS.length; i++) {
+        const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2500);
+            const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (res.ok) {
+                const data = await res.json();
+                const audioStream = data.adaptiveFormats?.find(f => f.itag === '140' || f.itag === 140);
+                if (audioStream && audioStream.url) {
+                    window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length; 
+                    return audioStream.url;
+                }
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+
+    // Absolute last resort
+    return `${window.INVIDIOUS[window.invIdx]}/latest_version?id=${videoId}&itag=140&local=true`;
 }
 
+// 2. GHOST PRE-BUFFERING: Downloads the next track into the browser's memory cache
 function preloadNextTrackInQueue() {
     if (window.AUDIO_ENGINE !== 'native' || window.OCTAVE.currentIndex < 0) return;
     const nextIdx = window.OCTAVE.currentIndex + 1;
     if (nextIdx < window.OCTAVE.queue.length) {
         const nextId = window.OCTAVE.queue[nextIdx].videoId;
-        PRELOAD_AUDIO.src = getStreamUrl(nextId);
-        preloadedVideoId = nextId;
-        PRELOAD_AUDIO.load(); 
+        getFastestStreamUrl(nextId).then(fastUrl => {
+            PRELOAD_AUDIO.src = fastUrl;
+            PRELOAD_AUDIO.load(); // Downloads silently in the background!
+        });
     }
 }
 
-const tryNextStream = (videoId) => {
-    // 100% Synchronous - no 'await' used, which keeps the user gesture alive for Chrome!
-    if (preloadedVideoId === videoId && PRELOAD_AUDIO.src) {
+const tryNextStream = async (videoId) => {
+    // If we already secretly preloaded this specific song, use the cached URL instantly!
+    if (PRELOAD_AUDIO.src && PRELOAD_AUDIO.src.includes(videoId)) {
         AUDIO.src = PRELOAD_AUDIO.src;
     } else {
-        AUDIO.src = getStreamUrl(videoId);
+        // Otherwise, fetch the fast stream URL
+        AUDIO.src = await getFastestStreamUrl(videoId);
     }
     
     AUDIO.load();
-    AUDIO.play().catch((e) => { console.warn("Chrome Autoplay blocked or network error", e) });
+    AUDIO.play().catch(() => {});
 };
 
 AUDIO.addEventListener('playing', () => {
@@ -205,6 +246,8 @@ AUDIO.addEventListener('playing', () => {
     updatePlayIcons('fa-solid fa-pause');
     startProgressTracking();
     syncMediaSessionPosition();
+    
+    // The moment the current song starts, secretly download the next one!
     preloadNextTrackInQueue();
 });
 
@@ -220,16 +263,14 @@ AUDIO.addEventListener('ended', () => {
     handleTrackEnded();
 });
 
-AUDIO.addEventListener('error', () => {
+AUDIO.addEventListener('error', async () => {
     if (window.AUDIO_ENGINE !== 'native') return;
-    // If the server fails to load the stream, immediately rotate and try again natively
-    window.invIdx = (window.invIdx + 1) % window.INVIDIOUS.length;
+    // If a server randomly dies mid-song, immediately grab a new fast server and resume
     if (window.OCTAVE.currentIndex >= 0) {
         const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-        const currentPos = AUDIO.currentTime || 0;
-        AUDIO.src = getStreamUrl(track.videoId);
-        AUDIO.currentTime = currentPos;
-        AUDIO.load();
+        const currentPos = AUDIO.currentTime;
+        AUDIO.src = await getFastestStreamUrl(track.videoId);
+        AUDIO.currentTime = currentPos; // Resume exactly where it died
         AUDIO.play().catch(() => {});
     }
 });
@@ -287,19 +328,6 @@ function onYTS(e) {
 let progressTimer = null;
 let sleepTimerId = null;
 
-// AUTOPLAY QUEUE PROGRESSION LOGIC
-window.playNextLogic = () => {
-    if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.currentIndex < window.OCTAVE.queue.length - 1) {
-        window.playTrackByIndex(window.OCTAVE.currentIndex + 1);
-    } else if (window.generateDiscoverMix) {
-        window.generateDiscoverMix(); 
-    } else {
-        window.OCTAVE.isPlaying = false;
-        updatePlayIcons('fa-solid fa-play');
-        clearInterval(progressTimer);
-    }
-};
-
 function handleTrackEnded() {
     window.OCTAVE.isPlaying = false;
     clearInterval(progressTimer);
@@ -309,7 +337,6 @@ function handleTrackEnded() {
         window.OCTAVE.playStats[track.videoId].completes++;
         window.saveCache();
     }
-    // Triggers the next song automatically for both Brave and Chrome
     if (window.playNextLogic) window.playNextLogic();
 }
 
@@ -386,7 +413,7 @@ function updateMediaSession(track) {
 
     navigator.mediaSession.setActionHandler('play', () => { window.togglePlay(); });
     navigator.mediaSession.setActionHandler('pause', () => { window.togglePlay(); });
-    navigator.mediaSession.setActionHandler('nexttrack', () => { window.playNextLogic(); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => { document.getElementById('fp-next')?.click(); });
     navigator.mediaSession.setActionHandler('previoustrack', () => { window.playPrev(); });
 
     try {
@@ -460,7 +487,7 @@ window.playTrackByIndex = (index) => {
         if (ytReady && YTP) YTP.loadVideoById({ videoId: track.videoId });
     } else {
         AUDIO.pause();
-        tryNextStream(track.videoId); 
+        tryNextStream(track.videoId); // Starts the fast stream system
     }
 };
 
@@ -878,8 +905,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMediaSession(track); 
         
         if (window.AUDIO_ENGINE === 'native') {
-            AUDIO.src = getStreamUrl(track.videoId);
-            AUDIO.load();
+            getFastestStreamUrl(track.videoId).then(url => {
+                AUDIO.src = url;
+                AUDIO.load();
+            });
         }
     }
 
