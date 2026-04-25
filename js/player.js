@@ -1,6 +1,6 @@
 // ============================================================
 // player.js — Octave Hybrid Audio Engine
-// Fixed Rapid-Skip Bug / Chrome Background Play / Brave IFrame
+// Chrome Native Engine (Stable 1-Stream Session) | Brave IFrame
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -32,7 +32,7 @@ window.OCTAVE = {
 };
 
 // ─── HYBRID ENGINE ROUTER ──────────────────────────────────────────────────
-window.AUDIO_ENGINE = 'native'; // Native for Chrome background play
+window.AUDIO_ENGINE = 'native'; 
 
 if (navigator.brave && navigator.brave.isBrave) {
     navigator.brave.isBrave().then(isBrave => {
@@ -42,7 +42,7 @@ if (navigator.brave && navigator.brave.isBrave) {
         }
     });
 } else {
-    console.log("Octave: Chrome/Safari detected. Using Native Engine.");
+    console.log("Octave: Chrome/Safari detected. Using Stable Single-Stream Native Engine.");
 }
 
 window.initTrackStats = (videoId) => {
@@ -154,17 +154,20 @@ fetch('https://api.invidious.io/instances.json?sort_by=health')
 window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
 window.pipedIdx = Math.floor(Math.random() * window.PIPED.length);
 
-// ─── BLAZING FAST NATIVE ENGINE (CHROME) ──────────────────────────────────────
+// ─── STABLE NATIVE ENGINE (CHROME) ──────────────────────────────────────────
 const AUDIO = new Audio();
 AUDIO.preload = 'auto';
-
-const PRELOAD_AUDIO = new Audio(); 
-PRELOAD_AUDIO.preload = 'auto';
+// Fix 5: Lock media session properties
+AUDIO.setAttribute("playsinline", "true");
+AUDIO.setAttribute("webkit-playsinline", "true");
+AUDIO.crossOrigin = "anonymous";
 
 let audioUnlocked = false;
 function unlockAudioForSafari() {
     if (audioUnlocked) return;
     audioUnlocked = true;
+    // Fix 1: Just a raw empty play catch on first user interaction to bless the element
+    AUDIO.play().catch(() => {});
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const buf = ctx.createBuffer(1, 1, 22050);
@@ -178,9 +181,8 @@ function unlockAudioForSafari() {
 document.addEventListener('click', unlockAudioForSafari, { once: true });
 document.addEventListener('touchstart', unlockAudioForSafari, { once: true });
 
-// PATIENT FETCHER: No timeouts, no race aborts. It takes exactly as long as the server needs.
 async function getDirectAudioUrl(videoId) {
-    // Try Piped APIs first
+    // Try Piped APIs
     for (let i = 0; i < window.PIPED.length; i++) {
         const base = window.PIPED[(window.pipedIdx + i) % window.PIPED.length];
         try {
@@ -196,7 +198,7 @@ async function getDirectAudioUrl(videoId) {
         } catch (e) { continue; }
     }
 
-    // Try Invidious APIs if Piped fails
+    // Try Invidious APIs
     for (let i = 0; i < window.INVIDIOUS.length; i++) {
         const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
         try {
@@ -211,40 +213,17 @@ async function getDirectAudioUrl(videoId) {
             }
         } catch (e) { continue; }
     }
-    
     return null;
-}
-
-function preloadNextTrackInQueue() {
-    if (window.AUDIO_ENGINE !== 'native' || window.OCTAVE.currentIndex < 0) return;
-    const nextIdx = window.OCTAVE.currentIndex + 1;
-    if (nextIdx < window.OCTAVE.queue.length) {
-        const nextId = window.OCTAVE.queue[nextIdx].videoId;
-        getDirectAudioUrl(nextId).then(url => {
-            if (url) {
-                PRELOAD_AUDIO.src = url;
-                PRELOAD_AUDIO.load(); 
-            }
-        });
-    }
 }
 
 const tryNextStream = async (videoId) => {
     updatePlayIcons('fa-solid fa-spinner fa-spin'); 
     
-    let targetUrl = null;
-
-    if (PRELOAD_AUDIO.src && PRELOAD_AUDIO.src.includes(videoId)) {
-        targetUrl = PRELOAD_AUDIO.src;
-    } else {
-        targetUrl = await getDirectAudioUrl(videoId);
-    }
+    // Fix 2: Fetch URL completely BEFORE assigning src
+    const url = await getDirectAudioUrl(videoId);
     
-    // Stop the silence loop now that we have a real target
-    AUDIO.loop = false;
-
-    if (targetUrl) {
-        AUDIO.src = targetUrl;
+    if (url) {
+        AUDIO.src = url;
         AUDIO.load();
         AUDIO.play().catch(() => {
             updatePlayIcons('fa-solid fa-play');
@@ -254,48 +233,42 @@ const tryNextStream = async (videoId) => {
         console.error("All proxies failed to load track.");
         updatePlayIcons('fa-solid fa-play');
         window.OCTAVE.isPlaying = false;
-        AUDIO.pause();
+        // Fix 3: If stream genuinely fails to load, skip track cleanly
+        window.playNextLogic(); 
     }
 };
 
-AUDIO.addEventListener('error', async () => {
+AUDIO.addEventListener('error', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
     
-    // If the stream fails, silently spin and try another server, waiting patiently.
-    if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.isPlaying) {
-        window.invIdx = (window.invIdx + 1) % window.INVIDIOUS.length;
-        window.pipedIdx = (window.pipedIdx + 1) % window.PIPED.length;
-        
-        const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
-        const currentPos = AUDIO.currentTime || 0;
-        
-        updatePlayIcons('fa-solid fa-spinner fa-spin');
-        const newUrl = await getDirectAudioUrl(track.videoId);
-        
-        if (newUrl) {
-            AUDIO.src = newUrl;
-            AUDIO.currentTime = currentPos; 
-            AUDIO.load();
-            AUDIO.play().catch(() => {});
-        } else {
-            updatePlayIcons('fa-solid fa-play');
-            window.OCTAVE.isPlaying = false;
-        }
-    }
+    // Fix 3: NEVER change src during playback. If it errors out, the session is dead. Move to next.
+    console.error("Stable media stream broken. Skipping to next track.");
+    window.playNextLogic();
 });
 
 AUDIO.addEventListener('playing', () => {
-    if (window.AUDIO_ENGINE !== 'native' || AUDIO.src.startsWith('data:audio')) return;
+    if (window.AUDIO_ENGINE !== 'native') return;
     window.OCTAVE.isPlaying = true;
+    
+    // Fix 4: Set hardware playback state
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = "playing";
+    }
+    
     updatePlayIcons('fa-solid fa-pause');
     startProgressTracking();
     syncMediaSessionPosition();
-    preloadNextTrackInQueue();
 });
 
 AUDIO.addEventListener('pause', () => {
-    if (window.AUDIO_ENGINE !== 'native' || AUDIO.src.startsWith('data:audio')) return;
+    if (window.AUDIO_ENGINE !== 'native') return;
     window.OCTAVE.isPlaying = false;
+    
+    // Fix 4: Set hardware playback state
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = "paused";
+    }
+
     const fpIcon = document.querySelector('#fp-play i');
     if (fpIcon && !fpIcon.classList.contains('fa-spinner')) {
         updatePlayIcons('fa-solid fa-play');
@@ -305,8 +278,6 @@ AUDIO.addEventListener('pause', () => {
 
 AUDIO.addEventListener('ended', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
-    // CRITICAL FIX: Ignore the 'ended' event if it was just the silent audio blessing
-    if (AUDIO.src.startsWith('data:audio')) return; 
     handleTrackEnded();
 });
 
@@ -347,11 +318,13 @@ function onYTS(e) {
     if (window.AUDIO_ENGINE !== 'iframe') return;
     if (e.data === YT.PlayerState.PLAYING) {
         window.OCTAVE.isPlaying = true;
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
         updatePlayIcons('fa-solid fa-pause');
         startProgressTracking();
         syncMediaSessionPosition();
     } else if (e.data === YT.PlayerState.PAUSED) {
         window.OCTAVE.isPlaying = false;
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
         updatePlayIcons('fa-solid fa-play');
         clearInterval(progressTimer);
     } else if (e.data === YT.PlayerState.ENDED) {
@@ -533,13 +506,7 @@ window.playTrackByIndex = (index) => {
     if (window.AUDIO_ENGINE === 'iframe') {
         if (ytReady && YTP) YTP.loadVideoById({ videoId: track.videoId });
     } else {
-        // BLESS AUDIO ELEMENT SYNCHRONOUSLY, BUT LOOP IT SO IT DOESN'T FIRE "ENDED"
-        const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-        AUDIO.loop = true;
-        AUDIO.src = SILENT_WAV;
-        AUDIO.play().catch(()=>{});
-
-        // Let the fetcher take its time to grab the real URL
+        AUDIO.pause();
         tryNextStream(track.videoId); 
     }
 };
@@ -956,15 +923,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
         updatePlayerUI(track);
         updateMediaSession(track); 
-        
-        if (window.AUDIO_ENGINE === 'native') {
-            getDirectAudioUrl(track.videoId).then(url => {
-                if (url) {
-                    AUDIO.src = url;
-                    AUDIO.load();
-                }
-            });
-        }
     }
 
     document.querySelector('.mini-player')?.addEventListener('click', (e) => {
