@@ -1,6 +1,6 @@
 // ============================================================
 // player.js — Octave Hybrid Audio Engine
-// Chrome Native Engine (No Timeouts / No Auto-Skip) | Brave IFrame
+// Fixed Rapid-Skip Bug / Chrome Background Play / Brave IFrame
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -232,33 +232,36 @@ function preloadNextTrackInQueue() {
 const tryNextStream = async (videoId) => {
     updatePlayIcons('fa-solid fa-spinner fa-spin'); 
     
+    let targetUrl = null;
+
     if (PRELOAD_AUDIO.src && PRELOAD_AUDIO.src.includes(videoId)) {
-        AUDIO.src = PRELOAD_AUDIO.src;
+        targetUrl = PRELOAD_AUDIO.src;
     } else {
-        const url = await getDirectAudioUrl(videoId);
-        if (url) {
-            AUDIO.src = url;
-        } else {
-            console.error("All proxies failed to load track.");
-            updatePlayIcons('fa-solid fa-play');
-            window.OCTAVE.isPlaying = false;
-            // Removed auto-skip! Just wait for user.
-            return;
-        }
+        targetUrl = await getDirectAudioUrl(videoId);
     }
     
-    AUDIO.load();
-    AUDIO.play().catch(() => {
+    // Stop the silence loop now that we have a real target
+    AUDIO.loop = false;
+
+    if (targetUrl) {
+        AUDIO.src = targetUrl;
+        AUDIO.load();
+        AUDIO.play().catch(() => {
+            updatePlayIcons('fa-solid fa-play');
+            window.OCTAVE.isPlaying = false;
+        });
+    } else {
+        console.error("All proxies failed to load track.");
         updatePlayIcons('fa-solid fa-play');
         window.OCTAVE.isPlaying = false;
-    });
+        AUDIO.pause();
+    }
 };
 
 AUDIO.addEventListener('error', async () => {
     if (window.AUDIO_ENGINE !== 'native') return;
     
-    // NO MORE AUTO-SKIP ON ERROR.
-    // If the stream fails, we just silently spin and try another server, letting it take its time.
+    // If the stream fails, silently spin and try another server, waiting patiently.
     if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.isPlaying) {
         window.invIdx = (window.invIdx + 1) % window.INVIDIOUS.length;
         window.pipedIdx = (window.pipedIdx + 1) % window.PIPED.length;
@@ -282,7 +285,7 @@ AUDIO.addEventListener('error', async () => {
 });
 
 AUDIO.addEventListener('playing', () => {
-    if (window.AUDIO_ENGINE !== 'native') return;
+    if (window.AUDIO_ENGINE !== 'native' || AUDIO.src.startsWith('data:audio')) return;
     window.OCTAVE.isPlaying = true;
     updatePlayIcons('fa-solid fa-pause');
     startProgressTracking();
@@ -291,7 +294,7 @@ AUDIO.addEventListener('playing', () => {
 });
 
 AUDIO.addEventListener('pause', () => {
-    if (window.AUDIO_ENGINE !== 'native') return;
+    if (window.AUDIO_ENGINE !== 'native' || AUDIO.src.startsWith('data:audio')) return;
     window.OCTAVE.isPlaying = false;
     const fpIcon = document.querySelector('#fp-play i');
     if (fpIcon && !fpIcon.classList.contains('fa-spinner')) {
@@ -302,6 +305,8 @@ AUDIO.addEventListener('pause', () => {
 
 AUDIO.addEventListener('ended', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
+    // CRITICAL FIX: Ignore the 'ended' event if it was just the silent audio blessing
+    if (AUDIO.src.startsWith('data:audio')) return; 
     handleTrackEnded();
 });
 
@@ -528,12 +533,13 @@ window.playTrackByIndex = (index) => {
     if (window.AUDIO_ENGINE === 'iframe') {
         if (ytReady && YTP) YTP.loadVideoById({ videoId: track.videoId });
     } else {
-        // BLESS AUDIO ELEMENT SYNCHRONOUSLY TO BEAT CHROME AUTOPLAY BLOCK
+        // BLESS AUDIO ELEMENT SYNCHRONOUSLY, BUT LOOP IT SO IT DOESN'T FIRE "ENDED"
         const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        AUDIO.loop = true;
         AUDIO.src = SILENT_WAV;
         AUDIO.play().catch(()=>{});
 
-        // Let it take its time to load the real URL
+        // Let the fetcher take its time to grab the real URL
         tryNextStream(track.videoId); 
     }
 };
