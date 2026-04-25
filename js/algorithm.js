@@ -36,7 +36,7 @@ window.fetchAutoDjBatch = async () => {
         const allKnown =[...Object.values(window.OCTAVE.liked || {}), ...(window.OCTAVE.recentPlayed || []), ...(window.OCTAVE.queue ||[])];
         const uniqueKnown = Array.from(new Map(allKnown.map(t =>[t.videoId, t])).values());
         
-        const topSeeds = uniqueKnown
+        let topSeeds = uniqueKnown
             .filter(t => !window.OCTAVE.sessionHistory.includes(t.videoId))
             .sort((a, b) => window.calculateTrackScore(b) - window.calculateTrackScore(a))
             .slice(0, 3);
@@ -44,42 +44,64 @@ window.fetchAutoDjBatch = async () => {
         if (topSeeds.length === 0 && window.OCTAVE.recentPlayed.length > 0) {
             topSeeds.push(window.OCTAVE.recentPlayed[0]);
         }
-        if (topSeeds.length === 0) return; 
 
         let candidatePool =[];
-        
-        const fetchPromises = topSeeds.map((seed, index) => {
-            const base = window.INVIDIOUS[(window.invIdx + Math.floor(Math.random() * 3)) % window.INVIDIOUS.length];
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout allowance
-            
-            return fetch(`${base}/api/v1/videos/${seed.videoId}?fields=recommendedVideos`, { signal: controller.signal })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.recommendedVideos) candidatePool.push(...d.recommendedVideos);
-                })
-                .catch(() => {})
-                .finally(() => clearTimeout(timeoutId));
-        });
 
-        await Promise.all(fetchPromises);
-
-        // FALLBACK: If seeds fail, grab popular music so queue doesn't die!
-        if (candidatePool.length === 0) {
-            try {
-                const base = window.INVIDIOUS[window.invIdx];
-                const r = await fetch(`${base}/api/v1/popular?videoCategory=10`);
-                if (r.ok) {
-                    const d = await r.json();
-                    candidatePool.push(...d);
+        // METHOD 1: Fetch recommended videos aggressively across safe instances
+        if (topSeeds.length > 0) {
+            for (const seed of topSeeds) {
+                for (let i = 0; i < window.INVIDIOUS.length; i++) {
+                    const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
+                    try {
+                        const controller = new AbortController();
+                        const id = setTimeout(() => controller.abort(), 3500); // 3.5 sec fail-fast timeout
+                        const r = await fetch(`${base}/api/v1/videos/${seed.videoId}?fields=recommendedVideos`, { signal: controller.signal });
+                        clearTimeout(id);
+                        if (r.ok) {
+                            const d = await r.json();
+                            if (d.recommendedVideos && d.recommendedVideos.length > 0) {
+                                candidatePool.push(...d.recommendedVideos);
+                                break; // Got recommendations for this seed, break inner loop!
+                            }
+                        }
+                    } catch (e) { continue; }
                 }
-            } catch(e) {}
+            }
         }
 
+        // METHOD 2: Robust Fallback -> Use the working Search API for the seed artists!
+        if (candidatePool.length < 5 && topSeeds.length > 0) {
+            for (const seed of topSeeds) {
+                try {
+                    const searchResults = await window.performSearch(`${seed.author} audio`);
+                    if (searchResults && searchResults.length > 0) {
+                        candidatePool.push(...searchResults);
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // METHOD 3: Nuclear Fallback -> Global Popular Music
+        if (candidatePool.length < 5) {
+            for (let i = 0; i < window.INVIDIOUS.length; i++) {
+                try {
+                    const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
+                    const r = await fetch(`${base}/api/v1/popular?videoCategory=10`);
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d && d.length > 0) {
+                            candidatePool.push(...d);
+                            break;
+                        }
+                    }
+                } catch(e) { continue; }
+            }
+        }
+
+        // Strict Music Firewall
         const badWords =['tutorial', 'vlog', 'news', 'podcast', 'interview', 'review', 'unboxing', 'live', 'type beat', 'full album', 'documentary'];
         
         const freshRecs = candidatePool.filter(v => {
-            // Very forgiving length check. If missing length, let it pass rather than killing the queue!
             const isShortEnough = !v.lengthSeconds || (v.lengthSeconds < 600 && v.lengthSeconds > 30); 
             const notPlayedThisSession = !window.OCTAVE.sessionHistory.includes(v.videoId);
             const notPenalized = window.calculateTrackScore({ videoId: v.videoId }) >= -5; 
@@ -88,17 +110,22 @@ window.fetchAutoDjBatch = async () => {
             const authorLower = (v.author || '').toLowerCase();
             const noBadWords = !badWords.some(bw => titleLower.includes(bw) || authorLower.includes(bw));
 
-            return isShortEnough && notPlayedThisSession && notPenalized && noBadWords;
+            // Prevent duplicating songs that are already physically sitting in the queue
+            const notInQueue = !window.OCTAVE.queue.some(q => q.videoId === v.videoId);
+
+            return isShortEnough && notPlayedThisSession && notPenalized && noBadWords && notInQueue;
         });
 
-        const uniqueRecs = Array.from(new Map(freshRecs.map(t => [t.videoId, t])).values());
+        // Deduplicate and Randomize
+        const uniqueRecs = Array.from(new Map(freshRecs.map(t =>[t.videoId, t])).values());
         uniqueRecs.sort(() => 0.5 - Math.random());
         
         const next5 = uniqueRecs.slice(0, 5).map(pick => ({
             videoId: pick.videoId, 
             title: pick.title, 
             author: pick.author,
-            thumb: (pick.videoThumbnails && pick.videoThumbnails.length > 0) ? pick.videoThumbnails[0].url : ''
+            // Handles different object shapes flawlessly
+            thumb: pick.thumb ? pick.thumb : ((pick.videoThumbnails && pick.videoThumbnails.length > 0) ? pick.videoThumbnails[0].url : '')
         }));
 
         if (next5.length > 0) {
@@ -113,6 +140,7 @@ window.fetchAutoDjBatch = async () => {
     }
 };
 
+// Queue Interceptor: Silently loads next 5 songs in the background when getting close to the end
 setTimeout(() => {
     if (window.playTrackByIndex) {
         const originalPlayTrackByIndex = window.playTrackByIndex;
@@ -130,6 +158,7 @@ setTimeout(() => {
 window.playNextLogic = async () => {
     if (window.OCTAVE.isTransitioning) return;
     
+    // Absolute failsafe if the background loading didn't finish fast enough
     if (window.OCTAVE.currentIndex >= window.OCTAVE.queue.length - 1) {
         const fpPlay = document.querySelector('#fp-play i');
         if (fpPlay) fpPlay.className = 'fa-solid fa-spinner fa-spin'; 
@@ -176,7 +205,6 @@ window.generateDiscoverMix = async () => {
     window.OCTAVE.currentIndex = -1;
     
     await window.fetchAutoDjBatch(); 
-    await window.fetchAutoDjBatch(); 
 
     if (window.OCTAVE.queue.length > 0) {
         window.OCTAVE.isNextTrackManual = true; 
@@ -184,11 +212,12 @@ window.generateDiscoverMix = async () => {
         const homeTab = document.querySelector('.nav-item[data-tab="home"]');
         if (homeTab) homeTab.click();
     } else {
+        // Restore perfect UI if it somehow fails
         window.OCTAVE.queue = backupQueue;
         window.OCTAVE.currentIndex = backupIndex;
         alert("Algorithm failed to connect to network. Try again.");
         const homeTab = document.querySelector('.nav-item[data-tab="home"]');
-        if (homeTab) homeTab.click(); // Safely triggers a perfect UI restore
+        if (homeTab) homeTab.click(); 
     }
 };
 
