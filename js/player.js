@@ -1,6 +1,6 @@
 // ============================================================
 // player.js — Octave Hybrid Audio Engine
-// Chrome Native Engine (Original Racer + Gesture Fix) | Brave IFrame
+// Chrome Native Engine (No Timeouts / No Auto-Skip) | Brave IFrame
 // ============================================================
 
 window.escapeHTML = (str) => {
@@ -42,7 +42,7 @@ if (navigator.brave && navigator.brave.isBrave) {
         }
     });
 } else {
-    console.log("Octave: Chrome/Safari detected. Using Native Racing Engine.");
+    console.log("Octave: Chrome/Safari detected. Using Native Engine.");
 }
 
 window.initTrackStats = (videoId) => {
@@ -124,6 +124,14 @@ window.importVault = (event) => {
     reader.readAsText(file);
 };
 
+// ─── API INSTANCES ──────────────────────────────────────────────────────────
+window.PIPED = [
+    'https://pipedapi.kavin.rocks',
+    'https://pipedapi.smnz.de',
+    'https://api.piped.projectsegfau.lt',
+    'https://piped-api.lunar.icu'
+];
+
 window.INVIDIOUS =[
     'https://inv.nadeko.net',
     'https://invidious.privacyredirect.com',
@@ -144,6 +152,7 @@ fetch('https://api.invidious.io/instances.json?sort_by=health')
     .catch(() => console.warn('Using fallback instances'));
 
 window.invIdx = Math.floor(Math.random() * window.INVIDIOUS.length);
+window.pipedIdx = Math.floor(Math.random() * window.PIPED.length);
 
 // ─── BLAZING FAST NATIVE ENGINE (CHROME) ──────────────────────────────────────
 const AUDIO = new Audio();
@@ -169,37 +178,41 @@ function unlockAudioForSafari() {
 document.addEventListener('click', unlockAudioForSafari, { once: true });
 document.addEventListener('touchstart', unlockAudioForSafari, { once: true });
 
-// ORIGINAL RACER LOGIC: Bypasses dead servers fast
-async function getFastestStreamUrl(videoId) {
-    return new Promise((resolve) => {
-        const controllers = [];
-        let resolved = false;
-
-        const racers = [...window.INVIDIOUS].sort(() => 0.5 - Math.random()).slice(0, 4);
-        
-        racers.forEach(base => {
-            const controller = new AbortController();
-            controllers.push(controller);
-            const pingUrl = `${base}/api/v1/videos/${videoId}?fields=videoId`;
-            
-            fetch(pingUrl, { method: 'GET', signal: controller.signal })
-                .then(res => {
-                    if (res.ok && !resolved) {
-                        resolved = true;
-                        controllers.forEach(c => c.abort());
-                        resolve(`${base}/latest_version?id=${videoId}&itag=140&local=true`);
-                    }
-                }).catch(() => {});
-        });
-
-        setTimeout(() => {
-            if (!resolved) {
-                resolved = true;
-                controllers.forEach(c => c.abort());
-                resolve(`${racers[0]}/latest_version?id=${videoId}&itag=140&local=true`);
+// PATIENT FETCHER: No timeouts, no race aborts. It takes exactly as long as the server needs.
+async function getDirectAudioUrl(videoId) {
+    // Try Piped APIs first
+    for (let i = 0; i < window.PIPED.length; i++) {
+        const base = window.PIPED[(window.pipedIdx + i) % window.PIPED.length];
+        try {
+            const res = await fetch(`${base}/streams/${videoId}`);
+            if (res.ok) {
+                const data = await res.json();
+                const stream = data.audioStreams?.find(s => String(s.itag) === '140') || data.audioStreams?.[0];
+                if (stream && stream.url) {
+                    window.pipedIdx = (window.pipedIdx + i) % window.PIPED.length;
+                    return stream.url;
+                }
             }
-        }, 2500);
-    });
+        } catch (e) { continue; }
+    }
+
+    // Try Invidious APIs if Piped fails
+    for (let i = 0; i < window.INVIDIOUS.length; i++) {
+        const base = window.INVIDIOUS[(window.invIdx + i) % window.INVIDIOUS.length];
+        try {
+            const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
+            if (res.ok) {
+                const data = await res.json();
+                const stream = data.adaptiveFormats?.find(f => String(f.itag) === '140');
+                if (stream && stream.url) {
+                    window.invIdx = (window.invIdx + i) % window.INVIDIOUS.length;
+                    return stream.url;
+                }
+            }
+        } catch (e) { continue; }
+    }
+    
+    return null;
 }
 
 function preloadNextTrackInQueue() {
@@ -207,9 +220,11 @@ function preloadNextTrackInQueue() {
     const nextIdx = window.OCTAVE.currentIndex + 1;
     if (nextIdx < window.OCTAVE.queue.length) {
         const nextId = window.OCTAVE.queue[nextIdx].videoId;
-        getFastestStreamUrl(nextId).then(fastUrl => {
-            PRELOAD_AUDIO.src = fastUrl;
-            PRELOAD_AUDIO.load(); 
+        getDirectAudioUrl(nextId).then(url => {
+            if (url) {
+                PRELOAD_AUDIO.src = url;
+                PRELOAD_AUDIO.load(); 
+            }
         });
     }
 }
@@ -220,7 +235,16 @@ const tryNextStream = async (videoId) => {
     if (PRELOAD_AUDIO.src && PRELOAD_AUDIO.src.includes(videoId)) {
         AUDIO.src = PRELOAD_AUDIO.src;
     } else {
-        AUDIO.src = await getFastestStreamUrl(videoId);
+        const url = await getDirectAudioUrl(videoId);
+        if (url) {
+            AUDIO.src = url;
+        } else {
+            console.error("All proxies failed to load track.");
+            updatePlayIcons('fa-solid fa-play');
+            window.OCTAVE.isPlaying = false;
+            // Removed auto-skip! Just wait for user.
+            return;
+        }
     }
     
     AUDIO.load();
@@ -230,30 +254,35 @@ const tryNextStream = async (videoId) => {
     });
 };
 
-let chromeErrorCount = 0;
 AUDIO.addEventListener('error', async () => {
     if (window.AUDIO_ENGINE !== 'native') return;
-    chromeErrorCount++;
     
-    // Prevent infinite loop freeze
-    if (chromeErrorCount >= 3) {
-        chromeErrorCount = 0;
-        window.playNextLogic();
-        return;
-    }
-    
-    if (window.OCTAVE.currentIndex >= 0) {
+    // NO MORE AUTO-SKIP ON ERROR.
+    // If the stream fails, we just silently spin and try another server, letting it take its time.
+    if (window.OCTAVE.currentIndex >= 0 && window.OCTAVE.isPlaying) {
+        window.invIdx = (window.invIdx + 1) % window.INVIDIOUS.length;
+        window.pipedIdx = (window.pipedIdx + 1) % window.PIPED.length;
+        
         const track = window.OCTAVE.queue[window.OCTAVE.currentIndex];
         const currentPos = AUDIO.currentTime || 0;
-        AUDIO.src = await getFastestStreamUrl(track.videoId);
-        AUDIO.currentTime = currentPos; 
-        AUDIO.play().catch(() => {});
+        
+        updatePlayIcons('fa-solid fa-spinner fa-spin');
+        const newUrl = await getDirectAudioUrl(track.videoId);
+        
+        if (newUrl) {
+            AUDIO.src = newUrl;
+            AUDIO.currentTime = currentPos; 
+            AUDIO.load();
+            AUDIO.play().catch(() => {});
+        } else {
+            updatePlayIcons('fa-solid fa-play');
+            window.OCTAVE.isPlaying = false;
+        }
     }
 });
 
 AUDIO.addEventListener('playing', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
-    chromeErrorCount = 0;
     window.OCTAVE.isPlaying = true;
     updatePlayIcons('fa-solid fa-pause');
     startProgressTracking();
@@ -275,6 +304,7 @@ AUDIO.addEventListener('ended', () => {
     if (window.AUDIO_ENGINE !== 'native') return;
     handleTrackEnded();
 });
+
 
 // ─── IFRAME ENGINE SETUP (BRAVE - UNTOUCHED) ──────────────────────────────────────────────
 let YTP = null;
@@ -500,11 +530,10 @@ window.playTrackByIndex = (index) => {
     } else {
         // BLESS AUDIO ELEMENT SYNCHRONOUSLY TO BEAT CHROME AUTOPLAY BLOCK
         const SILENT_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-        if (!AUDIO.src || AUDIO.src === window.location.href) {
-            AUDIO.src = SILENT_WAV;
-        }
+        AUDIO.src = SILENT_WAV;
         AUDIO.play().catch(()=>{});
 
+        // Let it take its time to load the real URL
         tryNextStream(track.videoId); 
     }
 };
@@ -923,7 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMediaSession(track); 
         
         if (window.AUDIO_ENGINE === 'native') {
-            getFastestStreamUrl(track.videoId).then(url => {
+            getDirectAudioUrl(track.videoId).then(url => {
                 if (url) {
                     AUDIO.src = url;
                     AUDIO.load();
