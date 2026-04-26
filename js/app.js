@@ -839,3 +839,103 @@ document.getElementById('start-yt-import')?.addEventListener('click', async () =
     btn.innerHTML = 'Import';
     btn.disabled = false;
 });
+// ============================================================
+// CHROME BACKGROUND PLAYBACK FIXES (doesn't affect Brave)
+// ============================================================
+(function() {
+    // Detect Brave browser
+    let isBrave = false;
+    if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
+        navigator.brave.isBrave().then(console.log).catch(() => {});
+        // Synchronous check: many Brave versions expose isBrave sync
+        isBrave = navigator.brave.isBrave ? await (async () => false)() : false;
+    }
+    // Better sync detection using a known property
+    if (navigator.brave && navigator.brave.isBrave) {
+        isBrave = true;
+    }
+    // Additional check: Brave's userAgent often contains "Brave"
+    if (!isBrave && navigator.userAgent.includes('Brave')) isBrave = true;
+    
+    if (isBrave) {
+        console.log('Brave detected – skipping Chrome background fixes');
+        return;
+    }
+    
+    console.log('Chrome/Chromium detected – applying background playback fixes');
+    
+    let silentAudioCtx = null;
+    let keepAliveStarted = false;
+    
+    function startSilentAudioContext() {
+        if (silentAudioCtx && silentAudioCtx.state === 'running') return;
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) return;
+        try {
+            silentAudioCtx = new AudioCtor();
+            const buffer = silentAudioCtx.createBuffer(1, 1, 22050);
+            const source = silentAudioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = true;
+            source.connect(silentAudioCtx.destination);
+            source.start();
+            silentAudioCtx.resume().catch(e => console.warn('Silent ctx resume failed', e));
+            keepAliveStarted = true;
+        } catch (e) {
+            console.warn('Silent AudioContext failed', e);
+        }
+    }
+    
+    // Wrap play functions to start silent context on first user playback
+    function wrapPlayFunction(originalFn, name) {
+        if (typeof originalFn !== 'function') return originalFn;
+        return function(...args) {
+            if (!keepAliveStarted) {
+                startSilentAudioContext();
+            }
+            return originalFn.apply(this, args);
+        };
+    }
+    
+    if (window.playTrack) window.playTrack = wrapPlayFunction(window.playTrack, 'playTrack');
+    if (window.playTrackByIndex) window.playTrackByIndex = wrapPlayFunction(window.playTrackByIndex, 'playTrackByIndex');
+    
+    // Visibility listener: resume if audio was playing and page becomes hidden
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && window.audio && !window.audio.paused) {
+            setTimeout(() => {
+                if (window.audio && !window.audio.paused) {
+                    window.audio.play().catch(e => console.warn('Auto-resume failed', e));
+                }
+            }, 100);
+        }
+    });
+    
+    // Override MediaSession pause action to prevent actual pause
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('pause', () => {
+            if (window.audio && !window.audio.paused) {
+                setTimeout(() => window.audio.play().catch(e => console.warn), 50);
+            }
+        });
+    }
+    
+    // Also start silent context on any 'play' event from the audio element
+    if (window.audio) {
+        window.audio.addEventListener('play', () => {
+            if (!keepAliveStarted) startSilentAudioContext();
+        });
+    } else {
+        // If audio element is created later, listen for its addition
+        const observer = new MutationObserver(() => {
+            if (window.audio && !window.audio._bgFixAttached) {
+                window.audio.addEventListener('play', () => {
+                    if (!keepAliveStarted) startSilentAudioContext();
+                });
+                window.audio._bgFixAttached = true;
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+})();
